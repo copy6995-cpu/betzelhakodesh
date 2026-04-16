@@ -25,7 +25,7 @@ export async function SiteHeader() {
                 <span className="text-white font-bold text-sm">בצ</span>
               </div>
               <span className="text-lg font-semibold tracking-tight">
-                בצילא הקודש
+                בצל הקודש
               </span>
             </Link>
             <nav className="hidden md:flex gap-1">

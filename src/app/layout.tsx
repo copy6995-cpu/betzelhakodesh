@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "בצילא הקודש",
+  title: "בצל הקודש",
   description: "מערכת ניהול הבחורים של ישיבות בעלזא",
 };
 

@@ -101,25 +101,29 @@ export default async function BachurimPage({
         <SearchBox placeholder="שם, קוד אישי, מספר הוק..." />
       </div>
 
-      <div className="bg-white rounded-xl card-shadow overflow-hidden">
-        <div className="sticky top-16 z-30 bg-white px-5 py-3 border-b border-[var(--color-border)]">
+      <div className="bg-white rounded-xl card-shadow">
+        {/* Count bar: sticky below the site header (h-16 = 64px). */}
+        <div className="sticky top-16 z-30 bg-white px-5 py-3 border-b border-[var(--color-border)] rounded-t-xl">
           <div className="text-sm font-semibold text-[var(--color-primary)]">
             {formatNum(total)} בחורים
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--color-muted)]">
+            {/* Thead: sticky directly below the count bar (64px + ~49px). Each
+                th has its own bg-color so the row remains opaque when the
+                data rows scroll under it. */}
+            <thead className="sticky top-[calc(4rem+49px)] z-20">
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="py-3 pe-5 ps-5 font-semibold">שם מלא</th>
-                <th className="py-3 px-4 font-semibold">קוד אישי</th>
-                <th className="py-3 px-4 font-semibold">ישיבה</th>
-                <th className="py-3 px-4 font-semibold">שיעור</th>
-                <th className="py-3 px-4 font-semibold">עיר</th>
-                <th className="py-3 px-4 font-semibold">מחיר</th>
-                <th className="py-3 px-4 font-semibold">שולם</th>
-                <th className="py-3 px-4 font-semibold">יתרה</th>
-                <th className="py-3 px-4 font-semibold">תאריך סיום</th>
+                <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם מלא</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">קוד אישי</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">ישיבה</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">שיעור</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">עיר</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">מחיר</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">תאריך סיום</th>
               </tr>
             </thead>
             <tbody>

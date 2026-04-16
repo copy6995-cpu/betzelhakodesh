@@ -46,17 +46,17 @@ export default async function PaymentsPage({
         </p>
       </div>
 
-      <div className="bg-white rounded-xl card-shadow overflow-hidden">
+      <div className="bg-white rounded-xl card-shadow">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--color-muted)]">
+            <thead className="sticky top-16 z-20">
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="py-3 pe-5 ps-5 font-semibold">תאריך</th>
-                <th className="py-3 px-4 font-semibold">בחור</th>
-                <th className="py-3 px-4 font-semibold">מס׳</th>
-                <th className="py-3 px-4 font-semibold">סכום</th>
-                <th className="py-3 px-4 font-semibold">אמצעי</th>
-                <th className="py-3 px-4 font-semibold">אסמכתא</th>
+                <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">תאריך</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">בחור</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">מס׳</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">סכום</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">אמצעי</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">אסמכתא</th>
               </tr>
             </thead>
             <tbody>

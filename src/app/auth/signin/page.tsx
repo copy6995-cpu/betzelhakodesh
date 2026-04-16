@@ -44,7 +44,7 @@ function SignInForm() {
         >
           <span className="text-white font-bold text-2xl">בצ</span>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">בצילא הקודש</h1>
+        <h1 className="text-3xl font-bold tracking-tight">בצל הקודש</h1>
         <p className="text-[var(--color-muted-foreground)] mt-2">
           כניסה למערכת הניהול
         </p>

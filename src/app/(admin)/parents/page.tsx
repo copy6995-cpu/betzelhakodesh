@@ -67,18 +67,18 @@ export default async function ParentsPage({
         <SearchBox placeholder="שם, טלפון, ת.ז., אימייל..." />
       </div>
 
-      <div className="bg-white rounded-xl card-shadow overflow-hidden">
+      <div className="bg-white rounded-xl card-shadow">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--color-muted)]">
+            <thead className="sticky top-16 z-20">
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="py-3 pe-5 ps-5 font-semibold">שם הורה</th>
-                <th className="py-3 px-4 font-semibold">טלפון</th>
-                <th className="py-3 px-4 font-semibold">ת.ז.</th>
-                <th className="py-3 px-4 font-semibold text-center">ילדים</th>
-                <th className="py-3 px-4 font-semibold">סה״כ מחיר</th>
-                <th className="py-3 px-4 font-semibold">שולם</th>
-                <th className="py-3 px-4 font-semibold">יתרה</th>
+                <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם הורה</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">טלפון</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">ת.ז.</th>
+                <th className="py-3 px-4 font-semibold text-center bg-[var(--color-muted)]">ילדים</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">סה״כ מחיר</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
+                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
               </tr>
             </thead>
             <tbody>
