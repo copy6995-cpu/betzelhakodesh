@@ -1,4 +1,4 @@
-# בצילא הקודש — Bachurim & Parents Portal
+# בצk הקודש — Bachurim & Parents Portal
 
 מערכת web לניהול תלמידי ישיבות בעלזא (תשפ"ו ואילך), הורים, ותשלומים.
 
