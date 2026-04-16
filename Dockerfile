@@ -17,8 +17,11 @@ RUN npx prisma generate
 # Build the Next.js app
 RUN npm run build
 
-# Start the app
-CMD ["npm", "run", "start"]
+# Entrypoint runs prisma db push + seeds, then starts Next.
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Expose the port
 EXPOSE 3000
+
+CMD ["/app/docker-entrypoint.sh"]
