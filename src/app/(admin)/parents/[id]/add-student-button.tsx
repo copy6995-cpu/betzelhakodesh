@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { searchStudents, reassignStudent } from "../actions";
 
@@ -32,13 +32,22 @@ export function AddStudentButton({
   const [saving, startSaveTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // On open, fetch the first 30 students alphabetically so the user sees
+  // a browsable list even before typing.
+  useEffect(() => {
+    if (!open) return;
+    setQ("");
+    setSelected(null);
+    startSearchTransition(async () => {
+      const rows = await searchStudents({ q: "" });
+      setResults(rows);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   function onSearch(value: string) {
     setQ(value);
     setSelected(null);
-    if (value.trim().length < 2) {
-      setResults([]);
-      return;
-    }
     startSearchTransition(async () => {
       const rows = await searchStudents({ q: value });
       setResults(rows);
@@ -108,7 +117,7 @@ export function AddStudentButton({
                   מחפש...
                 </div>
               )}
-              {!searching && q.trim().length >= 2 && results.length === 0 && (
+              {!searching && results.length === 0 && (
                 <div className="text-sm text-[var(--color-muted-foreground)] py-4 text-center">
                   לא נמצאו תלמידים מתאימים
                 </div>

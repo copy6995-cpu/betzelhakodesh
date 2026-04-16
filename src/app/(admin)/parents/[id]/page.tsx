@@ -63,6 +63,7 @@ export default async function ParentDetailPage({
           <MergeParentButton
             keepParentId={parent.id}
             keepParentName={`${parent.firstName} ${parent.lastName}`}
+            keepParentLastName={parent.lastName}
           />
         </div>
       </div>

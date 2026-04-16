@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { searchParents, mergeParents } from "../actions";
 
@@ -15,9 +15,11 @@ type ParentMatch = {
 export function MergeParentButton({
   keepParentId,
   keepParentName,
+  keepParentLastName,
 }: {
   keepParentId: string;
   keepParentName: string;
+  keepParentLastName: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -28,13 +30,27 @@ export function MergeParentButton({
   const [merging, startMergeTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // When opened, seed the search with the current parent's lastName so the
+  // user immediately sees likely duplicates (same family). They can clear
+  // it to browse all.
+  useEffect(() => {
+    if (!open) return;
+    const initial = keepParentLastName ?? "";
+    setQ(initial);
+    setSelected(null);
+    startSearchTransition(async () => {
+      const rows = await searchParents({
+        q: initial,
+        excludeId: keepParentId,
+      });
+      setResults(rows);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   function onSearch(value: string) {
     setQ(value);
     setSelected(null);
-    if (value.trim().length < 2) {
-      setResults([]);
-      return;
-    }
     startSearchTransition(async () => {
       const rows = await searchParents({ q: value, excludeId: keepParentId });
       setResults(rows);
@@ -100,7 +116,7 @@ export function MergeParentButton({
                   מחפש...
                 </div>
               )}
-              {!searching && q.trim().length >= 2 && results.length === 0 && (
+              {!searching && results.length === 0 && (
                 <div className="text-sm text-[var(--color-muted-foreground)] py-4 text-center">
                   לא נמצאו הורים מתאימים
                 </div>

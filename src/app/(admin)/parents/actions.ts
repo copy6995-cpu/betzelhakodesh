@@ -49,23 +49,25 @@ export async function searchParents(params: {
   }>
 > {
   const q = params.q.trim();
-  if (q.length < 2) return [];
+  const baseWhere = params.excludeId ? { id: { not: params.excludeId } } : {};
   const rows = await prisma.parent.findMany({
-    where: {
-      AND: [
-        params.excludeId ? { id: { not: params.excludeId } } : {},
-        {
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { phone: { contains: q } },
-            { tz: { contains: q } },
+    where: q
+      ? {
+          AND: [
+            baseWhere,
+            {
+              OR: [
+                { firstName: { contains: q, mode: "insensitive" } },
+                { lastName: { contains: q, mode: "insensitive" } },
+                { phone: { contains: q } },
+                { tz: { contains: q } },
+              ],
+            },
           ],
-        },
-      ],
-    },
+        }
+      : baseWhere,
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    take: params.limit ?? 10,
+    take: params.limit ?? (q ? 15 : 30),
     include: { _count: { select: { students: true } } },
   });
   return rows.map((r) => ({
@@ -94,18 +96,19 @@ export async function searchStudents(params: {
   }>
 > {
   const q = params.q.trim();
-  if (q.length < 2) return [];
   const rows = await prisma.student.findMany({
-    where: {
-      OR: [
-        { firstName: { contains: q, mode: "insensitive" } },
-        { lastName: { contains: q, mode: "insensitive" } },
-        { fatherName: { contains: q, mode: "insensitive" } },
-        { personalCode: { contains: q } },
-      ],
-    },
+    where: q
+      ? {
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { fatherName: { contains: q, mode: "insensitive" } },
+            { personalCode: { contains: q } },
+          ],
+        }
+      : {},
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    take: params.limit ?? 10,
+    take: params.limit ?? (q ? 15 : 30),
     include: { parent: { select: { firstName: true, lastName: true, id: true } } },
   });
   return rows.map((s) => ({
