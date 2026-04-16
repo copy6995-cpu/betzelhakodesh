@@ -1,0 +1,39 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# next
+.next
+/out
+next-env.d.ts
+
+# production
+/build
+/.next/standalone
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# prisma
+src/generated
+
+# excel data (too big, imported on deploy)
+*.xlsx
+!prisma/seed-data.xlsx
+
+# Claude / agent workspace
+.claude/
+

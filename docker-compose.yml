@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: betzel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: betzel
+      POSTGRES_PASSWORD: betzel
+      POSTGRES_DB: betzel
+    ports:
+      - "5432:5432"
+    volumes:
+      - betzel_pgdata:/var/lib/postgresql/data
+volumes:
+  betzel_pgdata:

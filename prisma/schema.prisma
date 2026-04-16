@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Parent {
+  id        String    @id @default(cuid())
+  tz        String?   @unique
+  phone     String?
+  email     String?
+  firstName String
+  lastName  String
+  city      String?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  students  Student[]
+
+  @@index([lastName, firstName])
+  @@index([phone])
+}
+
+model Student {
+  id              String   @id @default(cuid())
+  year            String
+  personalCode    String
+
+  parentId        String
+  parent          Parent   @relation(fields: [parentId], references: [id], onDelete: Restrict)
+
+  firstName       String
+  lastName        String
+  fatherName      String
+  city            String?
+  yeshiva         String
+  shiur           String?
+  ariChul         String?
+
+  price           Int?
+  paymentMethod   String?
+  paymentsCount   Int?
+  nedarimHook     String?
+  endDateLabel    String?
+  endDate         DateTime?
+  registeredEshel Boolean  @default(false)
+  notes           String?
+  archived        Boolean  @default(false)
+
+  payments        Payment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year, personalCode])
+  @@index([year, yeshiva])
+  @@index([parentId])
+  @@index([year, shiur])
+  @@index([year, lastName, firstName])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  paymentNumber Int
+  amount        Decimal  @db.Decimal(10, 2)
+  method        String?
+  date          DateTime?
+  externalRef   String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([studentId])
+  @@index([externalRef])
+}
+
+model AppSetting {
+  key   String @id
+  value String
+}
+
+model Yeshiva {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+}
+
+model Shiur {
+  id           String @id @default(cuid())
+  name         String @unique
+  displayOrder Int    @default(0)
+}
+
+model EndDateOption {
+  id    String    @id @default(cuid())
+  year  String
+  label String
+  date  DateTime?
+
+  @@unique([year, label])
+}
