@@ -8,6 +8,10 @@ import type { NextAuthConfig } from "next-auth";
  * and server components only.
  */
 export const authConfig = {
+  // We run behind Traefik (the Host header is set by the proxy), so NextAuth's
+  // default strict host check would reject the request with `UntrustedHost`.
+  // Enabling trustHost tells it to use the proxied Host/X-Forwarded-* values.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/auth/signin" },
   providers: [],
