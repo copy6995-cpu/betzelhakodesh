@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatILS, formatNum } from "@/lib/utils";
+import { DeleteStudentButton } from "./delete-button";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,10 @@ export default async function BachurDetailPage({
           >
             עריכה
           </Link>
+          <DeleteStudentButton
+            studentId={student.id}
+            studentName={`${student.firstName} ${student.lastName}`}
+          />
         </div>
       </div>
 

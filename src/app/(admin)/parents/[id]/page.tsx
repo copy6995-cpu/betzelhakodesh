@@ -5,6 +5,7 @@ import { formatILS, formatNum } from "@/lib/utils";
 import { ParentEditForm } from "./form";
 import { MergeParentButton } from "./merge-button";
 import { AddStudentButton } from "./add-student-button";
+import { DeleteParentButton } from "./delete-button";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,11 @@ export default async function ParentDetailPage({
             keepParentId={parent.id}
             keepParentName={`${parent.firstName} ${parent.lastName}`}
             keepParentLastName={parent.lastName}
+          />
+          <DeleteParentButton
+            parentId={parent.id}
+            parentName={`${parent.firstName} ${parent.lastName}`}
+            studentCount={parent.students.length}
           />
         </div>
       </div>

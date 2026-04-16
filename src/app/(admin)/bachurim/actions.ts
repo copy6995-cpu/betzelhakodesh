@@ -154,3 +154,21 @@ export async function addPayment(payload: {
   revalidatePath(`/bachurim/${payload.studentId}`);
   revalidatePath("/payments");
 }
+
+/**
+ * Hard-delete a student and all their payments. Payments are cascade-deleted
+ * by the schema (Payment.student has onDelete: Cascade). Returns the
+ * parentId so the caller can redirect to the parent page.
+ */
+export async function deleteStudent(id: string): Promise<{ parentId: string }> {
+  const student = await prisma.student.findUnique({
+    where: { id },
+    select: { parentId: true },
+  });
+  if (!student) throw new Error("הבחור לא נמצא");
+  await prisma.student.delete({ where: { id } });
+  revalidatePath("/bachurim");
+  revalidatePath(`/parents/${student.parentId}`);
+  revalidatePath("/payments");
+  return { parentId: student.parentId };
+}

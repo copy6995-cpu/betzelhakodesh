@@ -186,3 +186,20 @@ export async function reassignStudent(params: {
   revalidatePath("/parents");
   revalidatePath(`/bachurim/${params.studentId}`);
 }
+
+/**
+ * Hard-delete a parent. Blocked if any students are still attached — the
+ * caller must reassign or delete them first. This intentionally does NOT
+ * cascade to students because deleting a parent with a dozen children is
+ * almost always a mistake.
+ */
+export async function deleteParent(id: string): Promise<void> {
+  const count = await prisma.student.count({ where: { parentId: id } });
+  if (count > 0) {
+    throw new Error(
+      `להורה עדיין משויכים ${count} ילדים. העבר אותם להורה אחר או מחק אותם קודם.`
+    );
+  }
+  await prisma.parent.delete({ where: { id } });
+  revalidatePath("/parents");
+}
