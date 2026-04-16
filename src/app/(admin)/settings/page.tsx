@@ -20,6 +20,23 @@ export default async function SettingsPage() {
 
       <div className="space-y-6">
         <section className="bg-white rounded-xl card-shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-[var(--color-primary)]">
+              ייבוא מאקסל
+            </h2>
+            <Link
+              href="/settings/import"
+              className="text-sm text-[var(--color-accent)] hover:underline"
+            >
+              פתח ←
+            </Link>
+          </div>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            העלאת קובץ <code>בצילא [שנה].xlsx</code> ליצירת/החלפת תלמידים ותשלומים.
+          </p>
+        </section>
+
+        <section className="bg-white rounded-xl card-shadow p-6">
           <h2 className="text-lg font-semibold text-[var(--color-primary)] mb-4">
             שנה פעילה
           </h2>
