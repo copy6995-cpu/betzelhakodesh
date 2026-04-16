@@ -1,14 +1,8 @@
 import Link from "next/link";
 import { getActiveYear, getAvailableYears } from "@/lib/year";
 import { SignOutButton } from "./sign-out-button";
-
-const NAV_LINKS = [
-  { href: "/", label: "דשבורד" },
-  { href: "/bachurim", label: "בחורים" },
-  { href: "/parents", label: "הורים" },
-  { href: "/payments", label: "תשלומים" },
-  { href: "/settings", label: "הגדרות" },
-];
+import { HeaderNav } from "./header-nav";
+import { YearSwitcher } from "./year-switcher";
 
 export async function SiteHeader() {
   const [activeYear, availableYears] = await Promise.all([
@@ -28,28 +22,13 @@ export async function SiteHeader() {
                 בצל הקודש
               </span>
             </Link>
-            <nav className="hidden md:flex gap-1">
-              {NAV_LINKS.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className="px-3 py-2 text-sm font-medium text-white/80 hover:text-white transition-colors rounded-md"
-                >
-                  {l.label}
-                </Link>
-              ))}
-            </nav>
+            <HeaderNav />
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-sm text-white/75">
-              <span>שנה פעילה:</span>
-              <span className="font-semibold text-white">{activeYear}</span>
-              {availableYears.length > 1 && (
-                <span className="text-white/50 text-xs">
-                  ({availableYears.length} שנים במערכת)
-                </span>
-              )}
-            </div>
+            <YearSwitcher
+              activeYear={activeYear}
+              availableYears={availableYears}
+            />
             <SignOutButton />
           </div>
         </div>
