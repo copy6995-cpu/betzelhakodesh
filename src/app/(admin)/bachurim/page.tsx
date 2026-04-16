@@ -102,18 +102,20 @@ export default async function BachurimPage({
       </div>
 
       <div className="bg-white rounded-xl card-shadow">
-        {/* Count bar: sticky below the site header (h-16 = 64px). */}
-        <div className="sticky top-16 z-30 bg-white px-5 py-3 border-b border-[var(--color-border)] rounded-t-xl">
-          <div className="text-sm font-semibold text-[var(--color-primary)]">
-            {formatNum(total)} בחורים
-          </div>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            {/* Thead: sticky directly below the count bar (64px + ~49px). Each
-                th has its own bg-color so the row remains opaque when the
-                data rows scroll under it. */}
-            <thead className="sticky top-[calc(4rem+49px)] z-20">
+            {/* Whole thead sticks as one unit right below the site header
+                (h-16 = 64px). Both rows keep their own bg-color so content
+                scrolls underneath opaquely. */}
+            <thead className="sticky top-16 z-20">
+              <tr>
+                <th
+                  colSpan={9}
+                  className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-primary)] bg-white border-b border-[var(--color-border)] rounded-t-xl"
+                >
+                  {formatNum(total)} בחורים
+                </th>
+              </tr>
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
                 <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם מלא</th>
                 <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">קוד אישי</th>

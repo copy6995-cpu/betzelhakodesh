@@ -71,6 +71,14 @@ export default async function ParentsPage({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-16 z-20">
+              <tr>
+                <th
+                  colSpan={7}
+                  className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-primary)] bg-white border-b border-[var(--color-border)] rounded-t-xl"
+                >
+                  {formatNum(total)} הורים
+                </th>
+              </tr>
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
                 <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם הורה</th>
                 <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">טלפון</th>
