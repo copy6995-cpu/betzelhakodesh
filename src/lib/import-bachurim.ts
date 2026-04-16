@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { prisma } from "./prisma";
+import { normalizeName } from "./names";
 
 // Column map for "כל הבחורים" sheet (0-indexed).
 // Kept in sync with prisma/seed-bachurim.ts.
@@ -183,18 +184,29 @@ export async function importBachurimFromBuffer(
     const city = asString(row[COL.city]);
     const yeshiva = asString(row[COL.yeshiva]) ?? "לא משובץ";
 
-    const parentKey = `${fatherName.trim()}|${lastName.trim()}`;
+    // Normalized key — same father+family with whitespace / gershayim /
+    // dash variants collapses to one bucket so we don't create duplicate
+    // Parent rows.
+    const normFather = normalizeName(fatherName);
+    const normLast = normalizeName(lastName);
+    const parentKey = `${normFather}|${normLast}`;
     let parentId = parentKeyToId.get(parentKey);
     if (!parentId) {
-      // Try to find an existing parent from a prior import.
-      const existing = await prisma.parent.findFirst({
-        where: {
-          firstName: fatherName || "(לא ידוע)",
-          lastName,
-        },
+      // Scan existing parents (from a prior import or a prior year) and find
+      // the first whose normalized name matches this row. We can't do the
+      // normalization inside Prisma, so we fetch candidates by the raw
+      // lastName first.
+      const candidates = await prisma.parent.findMany({
+        where: { lastName },
+        select: { id: true, firstName: true, lastName: true },
       });
-      if (existing) {
-        parentId = existing.id;
+      const match = candidates.find(
+        (p) =>
+          normalizeName(p.firstName) === normFather &&
+          normalizeName(p.lastName) === normLast
+      );
+      if (match) {
+        parentId = match.id;
       } else {
         const created = await prisma.parent.create({
           data: {

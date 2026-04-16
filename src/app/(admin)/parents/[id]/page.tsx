@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatILS, formatNum } from "@/lib/utils";
 import { ParentEditForm } from "./form";
+import { MergeParentButton } from "./merge-button";
+import { AddStudentButton } from "./add-student-button";
 
 export const dynamic = "force-dynamic";
 
@@ -42,15 +44,27 @@ export default async function ParentDetailPage({
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <div className="text-xs text-[var(--color-muted-foreground)]">
-          <Link href="/parents" className="hover:underline">
-            הורים
-          </Link>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-xs text-[var(--color-muted-foreground)]">
+            <Link href="/parents" className="hover:underline">
+              הורים
+            </Link>
+          </div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)] mt-1">
+            {parent.lastName} {parent.firstName}
+          </h1>
         </div>
-        <h1 className="text-3xl font-bold text-[var(--color-primary)] mt-1">
-          {parent.lastName} {parent.firstName}
-        </h1>
+        <div className="flex gap-2">
+          <AddStudentButton
+            targetParentId={parent.id}
+            targetParentName={`${parent.firstName} ${parent.lastName}`}
+          />
+          <MergeParentButton
+            keepParentId={parent.id}
+            keepParentName={`${parent.firstName} ${parent.lastName}`}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
