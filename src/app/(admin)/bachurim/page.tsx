@@ -107,7 +107,11 @@ export default async function BachurimPage({
             {formatNum(total)} בחורים
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {/* No overflow-x wrapper — per CSS spec, overflow-x:auto forces
+            overflow-y to compute as auto, which creates a scroll container
+            that captures our sticky <th>s (they'd stick to the wrapper
+            instead of the viewport). */}
+        <div>
           <table className="w-full text-sm">
             <thead>
               {/* Sticky applied per-<th> (not on <thead>/<tr>) — that's the

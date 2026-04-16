@@ -52,7 +52,7 @@ export default async function PaymentsPage({
             {formatNum(total)} תשלומים · סה״כ {formatILS(totalAmt)}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
