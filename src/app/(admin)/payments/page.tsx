@@ -47,24 +47,21 @@ export default async function PaymentsPage({
       </div>
 
       <div className="bg-white rounded-xl card-shadow">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] rounded-t-xl">
+          <div className="text-sm font-semibold text-[var(--color-primary)]">
+            {formatNum(total)} תשלומים · סה״כ {formatILS(totalAmt)}
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-16 z-20">
-              <tr>
-                <th
-                  colSpan={6}
-                  className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-primary)] bg-white border-b border-[var(--color-border)] rounded-t-xl"
-                >
-                  {formatNum(total)} תשלומים · סה״כ {formatILS(totalAmt)}
-                </th>
-              </tr>
+            <thead>
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">תאריך</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">בחור</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">מס׳</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">סכום</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">אמצעי</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">אסמכתא</th>
+                <th className="sticky top-16 z-20 py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">תאריך</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">בחור</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">מס׳</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">סכום</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">אמצעי</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">אסמכתא</th>
               </tr>
             </thead>
             <tbody>

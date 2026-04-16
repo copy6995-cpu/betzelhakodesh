@@ -68,25 +68,22 @@ export default async function ParentsPage({
       </div>
 
       <div className="bg-white rounded-xl card-shadow">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] rounded-t-xl">
+          <div className="text-sm font-semibold text-[var(--color-primary)]">
+            {formatNum(total)} הורים
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-16 z-20">
-              <tr>
-                <th
-                  colSpan={7}
-                  className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-primary)] bg-white border-b border-[var(--color-border)] rounded-t-xl"
-                >
-                  {formatNum(total)} הורים
-                </th>
-              </tr>
+            <thead>
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם הורה</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">טלפון</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">ת.ז.</th>
-                <th className="py-3 px-4 font-semibold text-center bg-[var(--color-muted)]">ילדים</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">סה״כ מחיר</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
+                <th className="sticky top-16 z-20 py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם הורה</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">טלפון</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">ת.ז.</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold text-center bg-[var(--color-muted)]">ילדים</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">סה״כ מחיר</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
               </tr>
             </thead>
             <tbody>

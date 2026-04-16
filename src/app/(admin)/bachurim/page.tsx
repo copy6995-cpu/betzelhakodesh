@@ -102,30 +102,27 @@ export default async function BachurimPage({
       </div>
 
       <div className="bg-white rounded-xl card-shadow">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] rounded-t-xl">
+          <div className="text-sm font-semibold text-[var(--color-primary)]">
+            {formatNum(total)} בחורים
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            {/* Whole thead sticks as one unit right below the site header
-                (h-16 = 64px). Both rows keep their own bg-color so content
-                scrolls underneath opaquely. */}
-            <thead className="sticky top-16 z-20">
-              <tr>
-                <th
-                  colSpan={9}
-                  className="px-5 py-3 text-right text-sm font-semibold text-[var(--color-primary)] bg-white border-b border-[var(--color-border)] rounded-t-xl"
-                >
-                  {formatNum(total)} בחורים
-                </th>
-              </tr>
+            <thead>
+              {/* Sticky applied per-<th> (not on <thead>/<tr>) — that's the
+                  pattern with the widest browser support. Each th keeps its
+                  own opaque bg so the data rows scroll under it cleanly. */}
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם מלא</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">קוד אישי</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">ישיבה</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">שיעור</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">עיר</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">מחיר</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
-                <th className="py-3 px-4 font-semibold bg-[var(--color-muted)]">תאריך סיום</th>
+                <th className="sticky top-16 z-20 py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם מלא</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">קוד אישי</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">ישיבה</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">שיעור</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">עיר</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">מחיר</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">תאריך סיום</th>
               </tr>
             </thead>
             <tbody>
