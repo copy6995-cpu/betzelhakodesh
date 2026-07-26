@@ -1,11 +1,10 @@
 import "dotenv/config";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client.js";
+import { prisma } from "../src/lib/prisma";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
-
+// Real yeshivot first (order 0..N), then the two administrative buckets
+// at 98/99 so they sit at the end of every dropdown. Students in these two
+// are NOT carried forward to a new year by the "העבר תלמידים" flow — that's
+// how the admin retires a bachur.
 const YESHIVOT = [
   "ברכת אהרן",
   "חיפה",
@@ -17,6 +16,7 @@ const YESHIVOT = [
   "ביתר",
   "בית שמש",
 ];
+const ADMIN_YESHIVOT = ["ארכיון", "שיעור א' - לא שובץ"];
 
 const SHIURIM = ["א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
 
@@ -32,7 +32,14 @@ async function main() {
       create: { name: YESHIVOT[i], displayOrder: i, active: true },
     });
   }
-  console.log(`Yeshivot seeded: ${YESHIVOT.length}`);
+  for (let i = 0; i < ADMIN_YESHIVOT.length; i++) {
+    await prisma.yeshiva.upsert({
+      where: { name: ADMIN_YESHIVOT[i] },
+      update: { displayOrder: 98 + i },
+      create: { name: ADMIN_YESHIVOT[i], displayOrder: 98 + i, active: true },
+    });
+  }
+  console.log(`Yeshivot seeded: ${YESHIVOT.length + ADMIN_YESHIVOT.length}`);
 
   for (let i = 0; i < SHIURIM.length; i++) {
     await prisma.shiur.upsert({
@@ -66,6 +73,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await pool.end();
     await prisma.$disconnect();
   });

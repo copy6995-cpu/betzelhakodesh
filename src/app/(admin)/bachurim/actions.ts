@@ -4,6 +4,22 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
 
+// Mirror of SHIUR_NEXT in settings/actions.ts. Kept here so single-student
+// promotions can bump the shiur the same way the bulk year-promotion does.
+// ט stays at ט — students who finished ט stay in the same shiur unless they
+// were manually moved to ארכיון.
+const SHIUR_NEXT: Record<string, string | null> = {
+  "א": "ב",
+  "ב": "ג",
+  "ג": "ד",
+  "ד": "ה",
+  "ה": "ו",
+  "ו": "ז",
+  "ז": "ח",
+  "ח": "ט",
+  "ט": "ט",
+};
+
 type StudentPayload = {
   id?: string;
   firstName: string;
@@ -149,10 +165,84 @@ export async function addPayment(payload: {
       date: payload.date ? new Date(payload.date) : null,
       externalRef: payload.externalRef,
       notes: payload.notes,
+      source: "manual",
     },
   });
   revalidatePath(`/bachurim/${payload.studentId}`);
   revalidatePath("/payments");
+}
+
+/**
+ * Copy a single student to another school year while KEEPING their existing
+ * personalCode (that's the whole point — bulk import gave them a random new
+ * code and the admin ended up managing duplicates). Roster fields carry over,
+ * shiur bumps one grade (ט stays at ט), and every money/registration field
+ * resets — those are per-year and the admin fills them fresh via forms.
+ *
+ * Returns the newly-created student's id so the caller can redirect to it.
+ * Throws when the same (year, personalCode) already exists, so the button
+ * never silently creates a duplicate.
+ */
+export async function promoteStudentToYear(
+  sourceStudentId: string,
+  targetYear: string
+): Promise<{ id: string }> {
+  const target = targetYear.trim();
+  if (!target) throw new Error("שנת יעד חסרה");
+
+  const source = await prisma.student.findUnique({
+    where: { id: sourceStudentId },
+  });
+  if (!source) throw new Error("הבחור לא נמצא");
+  if (source.year === target) throw new Error("הבחור כבר קיים בשנה הזו");
+
+  const existing = await prisma.student.findUnique({
+    where: {
+      year_personalCode: { year: target, personalCode: source.personalCode },
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error(
+      `בחור עם קוד ${source.personalCode} כבר קיים ב-${target}`
+    );
+  }
+
+  const nextShiur = source.shiur
+    ? SHIUR_NEXT[source.shiur] ?? source.shiur
+    : null;
+
+  const created = await prisma.student.create({
+    data: {
+      year: target,
+      personalCode: source.personalCode,
+      parentId: source.parentId,
+      firstName: source.firstName,
+      lastName: source.lastName,
+      fatherName: source.fatherName,
+      city: source.city,
+      yeshiva: source.yeshiva,
+      shiur: nextShiur,
+      ariChul: source.ariChul,
+      branch: source.branch,
+      yeshivaCode: source.yeshivaCode,
+      notes: source.notes,
+      // Fresh year — everything money/registration-related resets.
+      price: null,
+      paymentMethod: null,
+      paymentsCount: null,
+      nedarimHook: null,
+      endDateLabel: null,
+      endDate: null,
+      registeredEshel: false,
+      archived: false,
+    },
+  });
+
+  revalidatePath("/bachurim");
+  revalidatePath(`/bachurim/${sourceStudentId}`);
+  revalidatePath(`/parents/${source.parentId}`);
+  return { id: created.id };
 }
 
 /**

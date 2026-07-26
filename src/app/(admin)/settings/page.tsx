@@ -37,6 +37,40 @@ export default async function SettingsPage() {
         </section>
 
         <section className="bg-white rounded-xl card-shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-[var(--color-primary)]">
+              נדרים פלוס
+            </h2>
+            <Link
+              href="/settings/nedarim"
+              className="text-sm text-[var(--color-accent)] hover:underline"
+            >
+              פתח ←
+            </Link>
+          </div>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            חיבור לAPI של נדרים פלוס: היסטוריית עסקאות אשראי + טפסים.
+          </p>
+        </section>
+
+        <section className="bg-white rounded-xl card-shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-[var(--color-primary)]">
+              ימות המשיח
+            </h2>
+            <Link
+              href="/settings/yemot"
+              className="text-sm text-[var(--color-accent)] hover:underline"
+            >
+              פתח ←
+            </Link>
+          </div>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            סנכרון הזמנות מיטה מ-IVR ימות המשיח לפי שבוע ותלמיד.
+          </p>
+        </section>
+
+        <section className="bg-white rounded-xl card-shadow p-6">
           <h2 className="text-lg font-semibold text-[var(--color-primary)] mb-4">
             שנה פעילה
           </h2>

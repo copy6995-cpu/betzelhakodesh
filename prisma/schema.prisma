@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model User {
@@ -18,17 +18,22 @@ model User {
 }
 
 model Parent {
-  id        String    @id @default(cuid())
-  tz        String?   @unique
-  phone     String?
-  email     String?
-  firstName String
-  lastName  String
-  city      String?
-  notes     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  students  Student[]
+  id          String    @id @default(cuid())
+  tz          String?   @unique
+  // Father's mobile ("פלאפון" in the roster xlsx). Primary contact number.
+  phone       String?
+  // Landline / home phone ("טלפון" in the roster xlsx).
+  homePhone   String?
+  // Mother's mobile ("פלאפון אם").
+  motherPhone String?
+  email       String?
+  firstName   String
+  lastName    String
+  city        String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  students    Student[]
 
   @@index([lastName, firstName])
   @@index([phone])
@@ -57,6 +62,11 @@ model Student {
   endDateLabel    String?
   endDate         DateTime?
   registeredEshel Boolean  @default(false)
+  // "תוקף" column in the תשפ"ז roster — community/branch affiliation
+  // (e.g. "בית מרדכי", "מונסי", "לונדון", "1"). Optional; may repeat.
+  branch          String?
+  // Yeshiva-side numeric code from "קוד ישיבה" in the roster xlsx.
+  yeshivaCode     String?
   notes           String?
   archived        Boolean  @default(false)
 
@@ -77,15 +87,23 @@ model Payment {
   studentId     String
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   paymentNumber Int
-  amount        Decimal  @db.Decimal(10, 2)
+  // SQLite has no native Decimal; Float is fine for ILS amounts under 1M.
+  // If precision ever matters, switch to String.
+  amount        Float
   method        String?
   date          DateTime?
   externalRef   String?
   notes         String?
+  // How this Payment got here — determines what a "purge legacy" run
+  // touches. "legacy" = imported from the original xlsx once. "nedarim"
+  // = materialized from a NedarimTransaction. "manual" = created by the
+  // office via the + תשלום חדש button. Only "legacy" is safe to bulk-delete.
+  source        String   @default("manual")
   createdAt     DateTime @default(now())
 
   @@index([studentId])
   @@index([externalRef])
+  @@index([source])
 }
 
 model AppSetting {
@@ -113,4 +131,190 @@ model EndDateOption {
   date  DateTime?
 
   @@unique([year, label])
+}
+
+/// Transaction pulled from Nedarim Plus (GetHistoryJson). We store enough
+/// to reconcile against Student.nedarimHook (via kevaId) or by phone/tz to
+/// the parent. Fields mirror the API response 1:1 so we can grow without
+/// migrations. Extra fields land in `raw` as JSON string.
+model NedarimTransaction {
+  id              String    @id @default(cuid())
+  transactionId   String    @unique // TransactionId from Nedarim (deduped)
+  shovar          String?
+  zeout           String?
+  clientName      String?
+  adresse         String?
+  phone           String?
+  mail            String?
+  amount          Float?
+  currency        Int?      // 1=ILS, 2=USD
+  transactionTime DateTime?
+  confirmation    String?
+  lastNum         String?
+  transactionType String?
+  groupe          String?
+  comments        String?
+  tashloumim      Int?
+  firstTashloum   Float?
+  nextTashloum    Float?
+  kabalaId        String?
+  kevaId          String?   // links to Student.nedarimHook for HK transactions
+  callId          String?
+  masofId         String?
+  raw             String    // full JSON payload for anything we didn't map
+  fetchedAt       DateTime  @default(now())
+
+  @@index([kevaId])
+  @@index([phone])
+  @@index([zeout])
+  @@index([transactionTime])
+}
+
+/// A single Nedarim form submission (GetJson). Shape is variable per TofesId,
+/// so the values are stored as a JSON blob. rowId is what identifies the
+/// submission in Nedarim.
+model NedarimFormSubmission {
+  id         String   @id @default(cuid())
+  tofesId    String   // which form this belongs to
+  rowId      String   // ID from Nedarim
+  submittedAt DateTime?
+  raw        String   // full JSON payload
+  fetchedAt  DateTime @default(now())
+
+  @@unique([tofesId, rowId])
+  @@index([tofesId, submittedAt])
+}
+
+/// Meta about which forms exist. User configures TofesId + display label.
+model NedarimFormConfig {
+  id        String   @id @default(cuid())
+  tofesId   String   @unique
+  label     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+/// A single הוראת קבע (standing order) pulled from Nedarim Plus'
+/// `GetKevaNew` endpoint. Represents the current commitment: monthly
+/// amount, how many charges are left, next charge date, error state.
+/// Distinct from `NedarimTransaction` which is the history of actually-
+/// executed charges — this table is the FORWARD-looking view (what will
+/// still be charged).
+model NedarimKeva {
+  id             String    @id @default(cuid())
+  kevaId         String    @unique         // DT_RowId in the API response
+  clientName     String?
+  addressPhone   String?                    // "כתובת מלאה וטלפון" — API returns combined
+  amount         Float?                     // סכום לחיוב
+  currency       Int?                       // 1 = ILS, 2 = USD (derived from Amount)
+  category       String?                    // קטגוריה
+  comments       String?
+  itra           Int?                       // יתרת חיובים (# of remaining charges)
+  success        Int?                       // מספר חיובים שבוצעו
+  nextDate       String?                    // תאריך חיוב הבא — dd/mm/yyyy from the API
+  errorText      String?                    // שגיאה בעת נסיון חיוב
+  lastNum        String?                    // 4 ספרות אחרונות של הכרטיס
+  tokef          String?                    // תוקף mmYY
+  hasToremCard   Boolean   @default(false)  // 14: יש כרטיס תורם
+  raw            String                     // full JSON row for anything we didn't map
+  fetchedAt      DateTime  @default(now())
+
+  @@index([kevaId])
+}
+
+/// A single row from a Yemot HaMashiach ApprovalAll.YYYY-WW.ymgr file.
+/// The API returns Hebrew-keyed fields; we normalize them into columns.
+/// personalCode is what links this to Student.personalCode.
+model YemotBedReservation {
+  id           String   @id @default(cuid())
+  source       String   // e.g. "ivr2:דוחות/1"
+  weekKey      String   // YYYY-WW (2025-32)
+  personalCode String   // "מספר זיהוי" from the ymgr row
+  name         String?  // "שם מזהה"
+  status       String?  // "מצב הזמנה" — usually "מאושר" or "אזל"
+  date         String?  // "תאריך" — dd/mm/yyyy (from Yemot)
+  className    String?  // "גזירה חמישית" (repurposed as class/branch label in this org)
+  branch       String?  // "גזירה שישית"
+  hebDate      String?  // "תאריך עברי"
+  raw          String   // full row JSON
+  fetchedAt    DateTime @default(now())
+
+  @@unique([source, weekKey, personalCode])
+  @@index([weekKey])
+  @@index([personalCode])
+  @@index([status])
+}
+
+/// Credit card charges made via the Yemot phone system (LogCreditCardOK.ymgr).
+/// Each row = one approved credit card transaction. The "מספר אישור" field is
+/// the Nedarim Plus hook/keva number.
+model YemotCreditCard {
+  id             String   @id @default(cuid())
+  personalCode   String
+  phone          String?
+  amount         Float?
+  currency       Int?
+  installments   Int?
+  status         String?
+  approvalNum    String?
+  date           String?
+  hebDate        String?
+  year           String?
+  lastDigits     String?
+  chargeDay      String?
+  nextChargeDate String?
+  customerName   String?
+  raw            String?
+  fetchedAt      DateTime @default(now())
+
+  @@unique([approvalNum])
+}
+
+/// Which Yemot IVR paths to sync from. `current: true` = included in "update
+/// latest week" (skip archive folders). Order controls sync/display.
+model YemotSource {
+  id      String  @id @default(cuid())
+  path    String  @unique // "ivr2:דוחות/1"
+  current Boolean @default(true)
+  order   Int     @default(0)
+  label   String?
+}
+
+/// A single physical room in the building. Grouped by `building` (which
+/// mirrors the sheet name in the original Excel drawing — קומה 1 חדרים
+/// 100-109 / דרעזיל / etc). `active=false` retires a room without deleting
+/// the historical allocations that reference it.
+model Room {
+  id          String  @id @default(cuid())
+  code        String  @unique          // "א100"
+  building    String                    // "קומה 1 חדרים 100-109"
+  displayName String?                   // optional prettier label
+  capacity    Int?                      // beds count, if known
+  order       Int     @default(0)
+  active      Boolean @default(true)
+
+  allocations RoomAllocation[]
+
+  @@index([building])
+}
+
+/// Week-scoped room-to-yeshiva assignment. `weekKey` is the Sunday date of
+/// the week in YYYY-MM-DD format (e.g. 2026-07-13 for the week starting
+/// Sunday 13-Jul-2026). Every week gets fresh allocations; past weeks stay
+/// in the DB as history. Import from an Excel spreadsheet is supported via
+/// the UI so old years can be back-filled.
+model RoomAllocation {
+  id        String   @id @default(cuid())
+  weekKey   String                     // "2026-07-13"  (Sunday date, ISO)
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  yeshiva   String                     // yeshiva name (matches Yeshiva.name)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([weekKey, roomId])
+  @@index([weekKey])
+  @@index([weekKey, yeshiva])
+  @@index([yeshiva])
 }

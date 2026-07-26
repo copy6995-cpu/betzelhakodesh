@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
 import { formatILS, formatNum } from "@/lib/utils";
 import { Pagination } from "@/components/pagination";
+import { SyncPaymentsButton } from "./sync-payments-button";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +40,14 @@ export default async function PaymentsPage({
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">תשלומים</h1>
-        <p className="text-[var(--color-muted-foreground)] mt-1">
-          {formatNum(total)} תשלומים בשנת {year} · סה״כ {formatILS(totalAmt)}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)]">תשלומים</h1>
+          <p className="text-[var(--color-muted-foreground)] mt-1">
+            {formatNum(total)} תשלומים בשנת {year} · סה״כ {formatILS(totalAmt)}
+          </p>
+        </div>
+        <SyncPaymentsButton />
       </div>
 
       <div className="bg-white rounded-xl card-shadow">

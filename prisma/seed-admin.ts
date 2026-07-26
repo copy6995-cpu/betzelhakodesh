@@ -1,11 +1,6 @@
 import "dotenv/config";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client.js";
 import bcrypt from "bcryptjs";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+import { prisma } from "../src/lib/prisma";
 
 async function main() {
   const email = process.env.ADMIN_EMAIL;
@@ -20,7 +15,7 @@ async function main() {
   const hash = await bcrypt.hash(password, 10);
 
   // Re-assert role=admin on every boot so whoever owns the ENV can never be
-  // locked out of the system, matching the RV-raiser pattern.
+  // locked out of the system.
   await prisma.user.upsert({
     where: { email },
     update: { role: "admin" },
@@ -35,6 +30,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await pool.end();
     await prisma.$disconnect();
   });

@@ -57,8 +57,8 @@ export async function searchParents(params: {
             baseWhere,
             {
               OR: [
-                { firstName: { contains: q, mode: "insensitive" } },
-                { lastName: { contains: q, mode: "insensitive" } },
+                { firstName: { contains: q} },
+                { lastName: { contains: q} },
                 { phone: { contains: q } },
                 { tz: { contains: q } },
               ],
@@ -100,9 +100,9 @@ export async function searchStudents(params: {
     where: q
       ? {
           OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { fatherName: { contains: q, mode: "insensitive" } },
+            { firstName: { contains: q} },
+            { lastName: { contains: q} },
+            { fatherName: { contains: q} },
             { personalCode: { contains: q } },
           ],
         }

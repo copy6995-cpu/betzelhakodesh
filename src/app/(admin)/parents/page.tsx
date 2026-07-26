@@ -26,11 +26,11 @@ export default async function ParentsPage({
     ...(q
       ? {
           OR: [
-            { firstName: { contains: q, mode: "insensitive" as const } },
-            { lastName: { contains: q, mode: "insensitive" as const } },
+            { firstName: { contains: q} },
+            { lastName: { contains: q} },
             { phone: { contains: q } },
             { tz: { contains: q } },
-            { email: { contains: q, mode: "insensitive" as const } },
+            { email: { contains: q} },
           ],
         }
       : {}),

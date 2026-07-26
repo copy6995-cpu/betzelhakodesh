@@ -29,7 +29,8 @@ export default async function ImportPage() {
           ייבוא מאקסל
         </h1>
         <p className="text-[var(--color-muted-foreground)] mt-1">
-          העלאה של <code>בצילא [שנה].xlsx</code>. הגיליון הנדרש: <code>כל הבחורים</code>.
+          העלאה של קובץ <code>xlsx</code> עם גיליון <code>כל הבחורים</code>.
+          המערכת מזהה את העמודות אוטומטית לפי הכותרות.
         </p>
       </div>
 
@@ -53,19 +54,58 @@ export default async function ImportPage() {
 
       <ImportForm activeYear={activeYear} availableYears={availableYears} />
 
-      <section className="mt-6 bg-[var(--color-muted)] rounded-xl p-5 text-sm">
-        <h2 className="font-semibold text-[var(--color-primary)] mb-2">שימו לב</h2>
-        <ul className="space-y-1 text-[var(--color-muted-foreground)] list-disc ps-5">
-          <li>
-            במצב <b>החלפה</b>, כל התלמידים ותשלומיהם באותה שנה יימחקו ויוחלפו בחדשים מהקובץ.
-          </li>
-          <li>
-            <b>הורים לא נמחקים</b> — הם נשמרים בין שנים ומחוברים לתלמידים לפי שם האב + משפחה.
-          </li>
-          <li>שורות ללא שם פרטי ושם משפחה יידלגו אוטומטית.</li>
-          <li>קודים אישיים קיימים ובאורך 6 ספרות יישמרו. חסרים יקבלו קוד חדש.</li>
-          <li>עמודות התשלום (N ועמודות O-T) יהפכו לרשומות Payment נפרדות.</li>
-        </ul>
+      <section className="mt-6 bg-[var(--color-muted)] rounded-xl p-5 text-sm space-y-4">
+        <div>
+          <h2 className="font-semibold text-[var(--color-primary)] mb-2">
+            עמודות מזוהות
+          </h2>
+          <p className="text-xs text-[var(--color-muted-foreground)] mb-2">
+            המערכת מזהה את העמודות לפי שם הכותרת (שורה 1 בגיליון). סדר
+            העמודות לא חשוב. הכותרות המקובלות:
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono text-[var(--color-muted-foreground)]">
+            <span>קוד התלמיד / קוד אישי</span>
+            <span>שם הבחור / שם פרטי</span>
+            <span>משפחה / שם משפחה</span>
+            <span>שם האב</span>
+            <span>עיר</span>
+            <span>שיעור</span>
+            <span>ישיבה</span>
+            <span>מסלול / חו&quot;ל/אר&quot;י</span>
+            <span>תוקף / קהילה / סניף</span>
+            <span>קוד ישיבה</span>
+            <span>טלפון (בית)</span>
+            <span>פלאפון (אב)</span>
+            <span>פלאפון אם</span>
+            <span>מייל</span>
+            <span>מחיר <i>(אופציונלי)</i></span>
+            <span>הוראת קבע / הוק <i>(אופציונלי)</i></span>
+          </div>
+        </div>
+        <div>
+          <h2 className="font-semibold text-[var(--color-primary)] mb-2">שימו לב</h2>
+          <ul className="space-y-1 text-[var(--color-muted-foreground)] list-disc ps-5">
+            <li>
+              במצב <b>החלפה</b>, כל התלמידים ותשלומיהם באותה שנה יימחקו
+              ויוחלפו בחדשים מהקובץ. הוקים ורישום לאשל יאבדו — יש להריץ שוב
+              &quot;שייך עכשיו&quot; בטפסים אחרי הייבוא.
+            </li>
+            <li>
+              <b>הורים לא נמחקים</b> — הם נשמרים בין שנים ומחוברים לתלמידים
+              לפי שם האב + משפחה. אם ההורה קיים כבר במאגר, טלפונים ומייל
+              חסרים יושלמו — קיימים לא יידרסו.
+            </li>
+            <li>שורות ללא שם פרטי ושם משפחה יידלגו אוטומטית.</li>
+            <li>
+              קודים אישיים באורך 6 ספרות יישמרו. חסרים או קצרים יקבלו קוד
+              חדש.
+            </li>
+            <li>
+              אם יש עמודות מחיר או תשלומים בקובץ (הפורמט הישן) הן יטופלו
+              אוטומטית. אם אין, ייבוא הרוסטר לבד.
+            </li>
+          </ul>
+        </div>
       </section>
     </div>
   );

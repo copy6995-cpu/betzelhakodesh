@@ -33,6 +33,18 @@ src/generated
 # excel data (too big, imported on deploy)
 *.xlsx
 !prisma/seed-data.xlsx
+# rooms export writes into this template at runtime — must ship with the code
+!data/rooms-template.xlsx
+
+# local SQLite database — real student data, never commit
+betzel.db
+betzel.db-journal
+betzel.db-shm
+betzel.db-wal
+backups/
+
+# build cache
+tsconfig.tsbuildinfo
 
 # Claude / agent workspace
 .claude/

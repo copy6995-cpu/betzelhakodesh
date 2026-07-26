@@ -8,6 +8,11 @@ const NAV_LINKS = [
   { href: "/bachurim", label: "בחורים", match: (p: string) => p.startsWith("/bachurim") },
   { href: "/parents", label: "הורים", match: (p: string) => p.startsWith("/parents") },
   { href: "/payments", label: "תשלומים", match: (p: string) => p.startsWith("/payments") },
+  { href: "/nedarim/transactions", label: "נדרים פלוס", match: (p: string) => p.startsWith("/nedarim") },
+  { href: "/yemot/beds", label: "מיטות", match: (p: string) => p.startsWith("/yemot/beds") },
+  { href: "/yemot/credit-cards", label: "סליקות", match: (p: string) => p.startsWith("/yemot/credit-cards") },
+  { href: "/rooms", label: "חדרים", match: (p: string) => p.startsWith("/rooms") },
+  { href: "/registrations", label: "רישומים", match: (p: string) => p.startsWith("/registrations") },
   { href: "/settings", label: "הגדרות", match: (p: string) => p.startsWith("/settings") },
 ];
 

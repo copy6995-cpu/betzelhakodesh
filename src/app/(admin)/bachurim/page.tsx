@@ -8,9 +8,80 @@ import { Pagination } from "@/components/pagination";
 
 export const dynamic = "force-dynamic";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 200;
 
-type SearchParams = { yeshiva?: string; q?: string; page?: string };
+type StatusFilter =
+  | "all"
+  | "no-hook"
+  | "no-eshel"
+  | "unattached"
+  | "hook"
+  | "eshel"
+  | "eshel-hook"
+  | "eshel-no-hook";
+
+type SearchParams = {
+  yeshiva?: string;
+  q?: string;
+  page?: string;
+  status?: StatusFilter;
+};
+
+/** Build the Prisma where clause for a status filter. "unattached" is the
+ *  broad "no hook AND no eshel" bucket. "eshel-hook" / "eshel-no-hook"
+ *  split the registered-eshel population by whether they also have a
+ *  Nedarim hook attached. */
+function statusWhere(status: StatusFilter | undefined): Record<string, unknown> {
+  switch (status) {
+    case "no-hook":
+      return { OR: [{ nedarimHook: null }, { nedarimHook: "" }] };
+    case "no-eshel":
+      return { registeredEshel: false };
+    case "unattached":
+      return {
+        AND: [
+          { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
+          { registeredEshel: false },
+        ],
+      };
+    case "hook":
+      return { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] };
+    case "eshel":
+      return { registeredEshel: true };
+    case "eshel-hook":
+      return {
+        AND: [
+          { registeredEshel: true },
+          { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] },
+        ],
+      };
+    case "eshel-no-hook":
+      return {
+        AND: [
+          { registeredEshel: true },
+          { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
+        ],
+      };
+    default:
+      return {};
+  }
+}
+
+/** Human label + short slug for a status. The slug is the URL-safe piece
+ *  we put in exported filenames so files are self-describing. */
+export const STATUS_META: Record<
+  StatusFilter,
+  { label: string; slug: string }
+> = {
+  all: { label: "כל הבחורים", slug: "all" },
+  "no-hook": { label: "ללא הוק", slug: "no-hook" },
+  "no-eshel": { label: 'ללא רישום אש"ל', slug: "no-eshel" },
+  unattached: { label: "לא משוייך", slug: "unattached" },
+  hook: { label: "עם הוק", slug: "hook" },
+  eshel: { label: 'רישום אש"ל', slug: "eshel" },
+  "eshel-hook": { label: 'רישום + הוק', slug: "eshel-hook" },
+  "eshel-no-hook": { label: 'רישום ללא הוק', slug: "eshel-no-hook" },
+};
 
 export default async function BachurimPage({
   searchParams,
@@ -21,18 +92,20 @@ export default async function BachurimPage({
   const year = await getActiveYear();
   const yeshiva = sp.yeshiva;
   const q = sp.q?.trim();
+  const status = (sp.status ?? "all") as StatusFilter;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const where = {
     year,
     archived: false,
     ...(yeshiva ? { yeshiva } : {}),
+    ...statusWhere(status),
     ...(q
       ? {
           OR: [
-            { firstName: { contains: q, mode: "insensitive" as const } },
-            { lastName: { contains: q, mode: "insensitive" as const } },
-            { fatherName: { contains: q, mode: "insensitive" as const } },
+            { firstName: { contains: q} },
+            { lastName: { contains: q} },
+            { fatherName: { contains: q} },
             { personalCode: { contains: q } },
             { nedarimHook: { contains: q } },
           ],
@@ -40,7 +113,24 @@ export default async function BachurimPage({
       : {}),
   };
 
-  const [students, total, yeshivaGroups, totalInYear] = await Promise.all([
+  // Same base scope as the yeshiva pills — the counts on the status pills
+  // should follow the current yeshiva filter (so switching yeshiva narrows
+  // the "unattached" count to that yeshiva), but ignore the status filter
+  // itself (else the pill for the active option would just show its own
+  // count).
+  const baseWhereWithoutStatus = {
+    year,
+    archived: false,
+    ...(yeshiva ? { yeshiva } : {}),
+  };
+
+  const [
+    students,
+    total,
+    yeshivaGroups,
+    totalInYear,
+    statusCounts,
+  ] = await Promise.all([
     prisma.student.findMany({
       where,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -59,6 +149,35 @@ export default async function BachurimPage({
       orderBy: { yeshiva: "asc" },
     }),
     prisma.student.count({ where: { year, archived: false } }),
+    Promise.all([
+      prisma.student.count({ where: baseWhereWithoutStatus }),
+      prisma.student.count({
+        where: { ...baseWhereWithoutStatus, ...statusWhere("no-hook") },
+      }),
+      prisma.student.count({
+        where: { ...baseWhereWithoutStatus, ...statusWhere("no-eshel") },
+      }),
+      prisma.student.count({
+        where: { ...baseWhereWithoutStatus, ...statusWhere("unattached") },
+      }),
+      prisma.student.count({
+        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel-hook") },
+      }),
+      prisma.student.count({
+        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel-no-hook") },
+      }),
+      prisma.student.count({
+        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel") },
+      }),
+    ]).then(([all, noHook, noEshel, unattached, eshelHook, eshelNoHook, eshel]) => ({
+      all,
+      noHook,
+      noEshel,
+      unattached,
+      eshelHook,
+      eshelNoHook,
+      eshel,
+    })),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -86,16 +205,97 @@ export default async function BachurimPage({
         />
       </div>
 
+      <div className="mb-6">
+        <div className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-2">
+          שיוך
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { key: "all", label: "הכל", count: statusCounts.all },
+              {
+                key: "eshel",
+                label: "רשומים",
+                count: statusCounts.eshel,
+              },
+              {
+                key: "eshel-hook",
+                label: "רישום + הוק",
+                count: statusCounts.eshelHook,
+              },
+              {
+                key: "eshel-no-hook",
+                label: "רישום ללא הוק",
+                count: statusCounts.eshelNoHook,
+              },
+              {
+                key: "no-hook",
+                label: "ללא הוק",
+                count: statusCounts.noHook,
+              },
+              {
+                key: "no-eshel",
+                label: 'ללא רישום אש"ל',
+                count: statusCounts.noEshel,
+              },
+              {
+                key: "unattached",
+                label: "לא משוייך (ללא הוק וללא אשל)",
+                count: statusCounts.unattached,
+              },
+            ] as const
+          ).map((opt) => {
+            const active = status === opt.key || (opt.key === "all" && status === "all");
+            const params = new URLSearchParams();
+            if (yeshiva) params.set("yeshiva", yeshiva);
+            if (q) params.set("q", q);
+            if (opt.key !== "all") params.set("status", opt.key);
+            const href = `/bachurim${params.toString() ? `?${params}` : ""}`;
+            return (
+              <Link
+                key={opt.key}
+                href={href}
+                className={
+                  "px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors " +
+                  (active ? "pill-active" : "pill-idle")
+                }
+              >
+                {opt.label}
+                <span className="ms-1.5 text-xs opacity-70">
+                  ({formatNum(opt.count)})
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
           חיפוש
         </div>
-        <Link
-          href="/bachurim/new"
-          className="inline-flex items-center px-4 h-10 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
-        >
-          + בחור חדש
-        </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href={(() => {
+              const params = new URLSearchParams();
+              if (yeshiva) params.set("yeshiva", yeshiva);
+              if (q) params.set("q", q);
+              if (status !== "all") params.set("status", status);
+              return `/api/bachurim/export${
+                params.toString() ? `?${params}` : ""
+              }`;
+            })()}
+            className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors"
+          >
+            ↓ יצוא לפי ישיבה
+          </a>
+          <Link
+            href="/bachurim/new"
+            className="inline-flex items-center px-4 h-10 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
+          >
+            + בחור חדש
+          </Link>
+        </div>
       </div>
       <div className="mb-6">
         <SearchBox placeholder="שם, קוד אישי, מספר הוק..." />

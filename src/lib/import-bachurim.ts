@@ -2,32 +2,63 @@ import * as XLSX from "xlsx";
 import { prisma } from "./prisma";
 import { normalizeName } from "./names";
 
-// Column map for "כל הבחורים" sheet (0-indexed).
-// Kept in sync with prisma/seed-bachurim.ts.
-const COL = {
-  yeshiva: 0,
-  personalCode: 1,
-  registeredEshel: 2,
-  firstName: 4,
-  lastName: 5,
-  fatherName: 6,
-  city: 7,
-  shiur: 8,
-  ariChul: 9,
-  price: 10,
-  paymentMethod: 11,
-  paymentsCount: 12,
-  paymentNedarim: 13,
-  payment1: 14,
-  payment2: 15,
-  payment3: 16,
-  payment4: 17,
-  payment5: 18,
-  payment6: 19,
-  endDate: 22,
-  notes: 23,
-  nedarimHook: 24,
+/**
+ * Header-detected column mapping. The importer sniffs the first row of the
+ * "כל הבחורים" sheet and figures out which column is which. This lets us
+ * accept both the historical "בצילא [שנה].xlsx" layout (which has prices +
+ * payment columns) and the newer "רשימה סופית תשפ"ז להעלאה.xlsx" layout
+ * (roster-only, no prices) from the same code path.
+ *
+ * Add a new alias here if a future column shows up under a new name.
+ */
+const HEADER_ALIASES = {
+  personalCode: ["קוד התלמיד", "קוד תלמיד", "קוד אישי", "קוד"],
+  firstName: ["שם הבחור", "שם פרטי", "שם הילד"],
+  lastName: ["משפחה", "שם משפחה"],
+  fatherName: ["שם האב", "אב"],
+  city: ["עיר", "יישוב"],
+  shiur: ["שיעור", "כיתה"],
+  yeshiva: ["ישיבה"],
+  ariChul: ["מסלול", 'חו"ל/אר"י', "אר\"י/חו\"ל", "חול/ארי"],
+  branch: ["תוקף", "קהילה", "סניף", "בית מדרש"],
+  yeshivaCode: ["קוד ישיבה"],
+  homePhone: ["טלפון", "טלפון בית"],
+  phone: ["פלאפון", "פלאפון אב", "טלפון אב", "טלפון נייד"],
+  motherPhone: ["פלאפון אם", "טלפון אם"],
+  email: ["מייל", "אימייל", "דוא\"ל", "email"],
+  registeredEshel: ["רישום לאשל", "אשל", "רשום באש\"ל"],
+  price: ["מחיר", "סכום", "מחיר תלמיד"],
+  paymentMethod: ["אמצעי תשלום", "אופן תשלום"],
+  paymentsCount: ["מספר תשלומים", "תשלומים"],
+  endDate: ["תאריך סיום", "עד מתי", "תוקף עד"],
+  notes: ["הערות", "הערה"],
+  nedarimHook: ["הוראת קבע", "הוק", "מספר הוק"],
+  paymentNedarim: ["נדרים פלוס", "נדרים"],
+  payment1: ["תשלום 1", "תשלום א"],
+  payment2: ["תשלום 2", "תשלום ב"],
+  payment3: ["תשלום 3", "תשלום ג"],
+  payment4: ["תשלום 4", "תשלום ד"],
+  payment5: ["תשלום 5", "תשלום ה"],
+  payment6: ["תשלום 6", "תשלום ו"],
 } as const;
+
+type Field = keyof typeof HEADER_ALIASES;
+type ColMap = Partial<Record<Field, number>>;
+
+function detectColumns(header: unknown[]): ColMap {
+  const map: ColMap = {};
+  const norm = header.map((h) => String(h ?? "").trim().toLowerCase());
+  for (const field of Object.keys(HEADER_ALIASES) as Field[]) {
+    const aliases = HEADER_ALIASES[field].map((s) => s.trim().toLowerCase());
+    for (let i = 0; i < norm.length; i++) {
+      if (aliases.includes(norm[i])) {
+        map[field] = i;
+        break;
+      }
+    }
+  }
+  return map;
+}
 
 function isErrorValue(v: unknown): boolean {
   if (v === null || v === undefined) return true;
@@ -61,6 +92,29 @@ function asBool(v: unknown): boolean {
   if (typeof v === "number") return v > 0;
   const s = String(v).trim().toLowerCase();
   return s === "1" || s === "true" || s === "כן";
+}
+
+/** Excel dates are day-serial numbers. Convert to a JS Date, or null. */
+function asDate(v: unknown): Date | null {
+  if (isErrorValue(v)) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v === "number") {
+    // Excel epoch is 1899-12-30 UTC.
+    const ms = Math.round((v - 25569) * 86400 * 1000);
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const s = String(v).trim();
+  const dmy = /^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/.exec(s);
+  if (dmy) {
+    return new Date(
+      parseInt(dmy[3], 10),
+      parseInt(dmy[2], 10) - 1,
+      parseInt(dmy[1], 10)
+    );
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function randomCode(): string {
@@ -104,6 +158,7 @@ export type ImportResult = {
   studentsCreated: number;
   paymentsCreated: number;
   rowsSkipped: number;
+  detectedColumns: Record<string, number>;
 };
 
 /**
@@ -113,6 +168,10 @@ export type ImportResult = {
  *   Used by the Docker-entrypoint seed.
  * - mode="replace-year": wipes Student+Payment rows for the given year first,
  *   then imports. Parent rows persist (they outlive years).
+ *
+ * Column layout is detected from the header row — both the legacy format
+ * (with prices/payments) and the newer "רשימה סופית" format (roster only)
+ * work through the same code path.
  */
 export async function importBachurimFromBuffer(
   buffer: Buffer,
@@ -132,6 +191,18 @@ export async function importBachurimFromBuffer(
     raw: true,
     defval: null,
   });
+  if (rows.length === 0) throw new Error("הגיליון ריק");
+
+  const columns = detectColumns(rows[0] ?? []);
+  // Required fields — at minimum we need names to build a Student.
+  const required: Field[] = ["firstName", "lastName"];
+  for (const f of required) {
+    if (columns[f] === undefined) {
+      throw new Error(
+        `כותרת חובה חסרה בגיליון: "${f}". וודא שהעמודות "שם הבחור" ו-"משפחה" קיימות.`
+      );
+    }
+  }
 
   let studentsDeleted = 0;
   if (mode === "skip-if-any-exist") {
@@ -146,11 +217,10 @@ export async function importBachurimFromBuffer(
         studentsCreated: 0,
         paymentsCreated: 0,
         rowsSkipped: 0,
+        detectedColumns: columns as Record<string, number>,
       };
     }
   } else if (mode === "replace-year") {
-    // Delete payments for students in this year (cascade only cascades if relation
-    // is configured with onDelete: Cascade — which it is for Payment).
     const toDelete = await prisma.student.findMany({
       where: { year },
       select: { id: true },
@@ -171,34 +241,51 @@ export async function importBachurimFromBuffer(
   let paymentsCreated = 0;
   let rowsSkipped = 0;
 
+  function get(row: unknown[], field: Field): unknown {
+    const idx = columns[field];
+    return idx === undefined ? null : row[idx];
+  }
+
   // Skip row 0 (header)
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (!row) { rowsSkipped++; continue; }
+    if (!row) {
+      rowsSkipped++;
+      continue;
+    }
 
-    const firstName = asString(row[COL.firstName]);
-    const lastName = asString(row[COL.lastName]);
-    if (!firstName || !lastName) { rowsSkipped++; continue; }
+    const firstName = asString(get(row, "firstName"));
+    const lastName = asString(get(row, "lastName"));
+    if (!firstName || !lastName) {
+      rowsSkipped++;
+      continue;
+    }
 
-    const fatherName = asString(row[COL.fatherName]) ?? "";
-    const city = asString(row[COL.city]);
-    const yeshiva = asString(row[COL.yeshiva]) ?? "לא משובץ";
+    const fatherName = asString(get(row, "fatherName")) ?? "";
+    const city = asString(get(row, "city"));
+    const yeshiva = asString(get(row, "yeshiva")) ?? "שיעור א' - לא שובץ";
+    const phone = asString(get(row, "phone"));
+    const homePhone = asString(get(row, "homePhone"));
+    const motherPhone = asString(get(row, "motherPhone"));
+    const email = asString(get(row, "email"));
 
-    // Normalized key — same father+family with whitespace / gershayim /
-    // dash variants collapses to one bucket so we don't create duplicate
-    // Parent rows.
+    // Parent bucketing — same normalized father+family collapses to one row.
     const normFather = normalizeName(fatherName);
     const normLast = normalizeName(lastName);
     const parentKey = `${normFather}|${normLast}`;
     let parentId = parentKeyToId.get(parentKey);
     if (!parentId) {
-      // Scan existing parents (from a prior import or a prior year) and find
-      // the first whose normalized name matches this row. We can't do the
-      // normalization inside Prisma, so we fetch candidates by the raw
-      // lastName first.
       const candidates = await prisma.parent.findMany({
         where: { lastName },
-        select: { id: true, firstName: true, lastName: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          homePhone: true,
+          motherPhone: true,
+          email: true,
+        },
       });
       const match = candidates.find(
         (p) =>
@@ -207,12 +294,27 @@ export async function importBachurimFromBuffer(
       );
       if (match) {
         parentId = match.id;
+        // Fill in any parent-level contact info this row has that the DB is
+        // missing. Never overwrite existing values — assume the DB might be
+        // more up-to-date than a bulk-uploaded roster.
+        const updates: Record<string, string | null> = {};
+        if (!match.phone && phone) updates.phone = phone;
+        if (!match.homePhone && homePhone) updates.homePhone = homePhone;
+        if (!match.motherPhone && motherPhone) updates.motherPhone = motherPhone;
+        if (!match.email && email) updates.email = email;
+        if (Object.keys(updates).length > 0) {
+          await prisma.parent.update({ where: { id: match.id }, data: updates });
+        }
       } else {
         const created = await prisma.parent.create({
           data: {
             firstName: fatherName || "(לא ידוע)",
             lastName,
             city,
+            phone,
+            homePhone,
+            motherPhone,
+            email,
           },
         });
         parentId = created.id;
@@ -221,7 +323,7 @@ export async function importBachurimFromBuffer(
       parentKeyToId.set(parentKey, parentId);
     }
 
-    const personalCode = normalizeCode(row[COL.personalCode], codesSeen);
+    const personalCode = normalizeCode(get(row, "personalCode"), codesSeen);
 
     const student = await prisma.student.create({
       data: {
@@ -233,30 +335,36 @@ export async function importBachurimFromBuffer(
         fatherName,
         city,
         yeshiva,
-        shiur: asString(row[COL.shiur]),
-        ariChul: asString(row[COL.ariChul]),
-        price: asInt(row[COL.price]),
-        paymentMethod: asString(row[COL.paymentMethod]),
-        paymentsCount: asInt(row[COL.paymentsCount]),
-        nedarimHook: asString(row[COL.nedarimHook]),
-        endDateLabel: asString(row[COL.endDate]),
-        registeredEshel: asBool(row[COL.registeredEshel]),
-        notes: asString(row[COL.notes]),
+        shiur: asString(get(row, "shiur")),
+        ariChul: asString(get(row, "ariChul")),
+        branch: asString(get(row, "branch")),
+        yeshivaCode: asString(get(row, "yeshivaCode")),
+        price: asInt(get(row, "price")),
+        paymentMethod: asString(get(row, "paymentMethod")),
+        paymentsCount: asInt(get(row, "paymentsCount")),
+        nedarimHook: asString(get(row, "nedarimHook")),
+        endDateLabel: asString(get(row, "endDate")),
+        endDate: asDate(get(row, "endDate")),
+        registeredEshel: asBool(get(row, "registeredEshel")),
+        notes: asString(get(row, "notes")),
       },
     });
     studentsCreated++;
 
-    const paymentCols: Array<{ num: number; col: number; method: string | null }> = [
-      { num: 0, col: COL.paymentNedarim, method: "נדרים פלוס" },
-      { num: 1, col: COL.payment1, method: null },
-      { num: 2, col: COL.payment2, method: null },
-      { num: 3, col: COL.payment3, method: null },
-      { num: 4, col: COL.payment4, method: null },
-      { num: 5, col: COL.payment5, method: null },
-      { num: 6, col: COL.payment6, method: null },
+    // Payment columns only exist in the legacy layout — silently skipped
+    // when the roster-only layout is uploaded (they won't be detected).
+    const paymentFields: Array<{ num: number; field: Field; method: string | null }> = [
+      { num: 0, field: "paymentNedarim", method: "נדרים פלוס" },
+      { num: 1, field: "payment1", method: null },
+      { num: 2, field: "payment2", method: null },
+      { num: 3, field: "payment3", method: null },
+      { num: 4, field: "payment4", method: null },
+      { num: 5, field: "payment5", method: null },
+      { num: 6, field: "payment6", method: null },
     ];
-    for (const p of paymentCols) {
-      const amt = asNumber(row[p.col]);
+    for (const p of paymentFields) {
+      if (columns[p.field] === undefined) continue;
+      const amt = asNumber(get(row, p.field));
       if (amt !== null && amt > 0) {
         await prisma.payment.create({
           data: {
@@ -264,6 +372,10 @@ export async function importBachurimFromBuffer(
             paymentNumber: p.num,
             amount: amt,
             method: p.method,
+            // Every payment cell from the source xlsx is treated as "legacy"
+            // — the office asked to be able to purge these in bulk once
+            // Nedarim + manual entries take over.
+            source: "legacy",
           },
         });
         paymentsCreated++;
@@ -280,5 +392,6 @@ export async function importBachurimFromBuffer(
     studentsCreated,
     paymentsCreated,
     rowsSkipped,
+    detectedColumns: columns as Record<string, number>,
   };
 }
