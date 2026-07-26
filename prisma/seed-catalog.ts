@@ -59,12 +59,14 @@ async function main() {
   }
   console.log(`EndDate options seeded for ${activeYear}: ${END_DATES.length}`);
 
+  // Create-only: the entrypoint runs this on every boot in the cloud, and the
+  // admin changes the active year from the UI — never overwrite it here.
   await prisma.appSetting.upsert({
     where: { key: "active_year" },
-    update: { value: activeYear },
+    update: {},
     create: { key: "active_year", value: activeYear },
   });
-  console.log(`Active year: ${activeYear}`);
+  console.log(`Active year (create-only): ${activeYear}`);
 }
 
 main()

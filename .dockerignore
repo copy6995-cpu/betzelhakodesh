@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+*.log
+README.md
+.claude
+src/generated
+
+# local-only artifacts — never bake into the image
+betzel.db
+betzel.db-*
+backups
+*.bat
+tsconfig.tsbuildinfo

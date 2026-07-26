@@ -1,7 +1,28 @@
-# בצל הקודש — תוכנה מקומית ל-Windows
+# בצל הקודש — מערכת ניהול תלמידי ישיבות
 
-מערכת לניהול תלמידי ישיבות בעלזא (בחורים, הורים, תשלומים) שרצה **מקומית**
-על מחשב יחיד. ללא שרת, ללא הוסטינג, ללא רשת חיצונית.
+מערכת לניהול תלמידי ישיבות בעלזא (בחורים, הורים, תשלומים, רישום אש"ל,
+חדרים) עם סנכרונים לנדרים פלוס ולימות המשיח.
+
+שני מצבי הרצה:
+- **ענן (Dokploy)** — הפריסה הראשית. push ל-main = deploy אוטומטי.
+- **מקומי (Windows)** — גיבוי/פיתוח, דרך קבצי ה-bat שלמטה.
+
+## פריסה בענן (Dokploy)
+
+1. יצירת Application מ-GitHub repo זה, branch `main`, build type: Dockerfile
+2. **Volume**: mount בנתיב `/data` (שם חי קובץ ה-SQLite)
+3. **משתני סביבה** (הערכים בקובץ `.env` המקומי):
+   - `DATABASE_URL=file:/data/betzel.db`
+   - `NEXTAUTH_URL=https://<הדומיין>`
+   - `NEXTAUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`
+   - `NEDARIM_MOSAD_ID`, `NEDARIM_API_PASSWORD`, `NEDARIM_FORMS_PASSWORD`
+   - `YEMOT_TOKEN`
+4. Domain + Deploy
+5. העלאת `betzel.db` הקיים אל ה-volume (scp לשרת ואז docker cp,
+   או Volume Restore מה-UI) והפעלה מחדש
+
+ה-entrypoint מריץ בכל עלייה `prisma db push` + seeds (אידמפוטנטי —
+לא דורס נתונים קיימים ולא משנה את השנה הפעילה).
 
 ## דרישות
 
