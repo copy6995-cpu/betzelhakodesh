@@ -200,6 +200,16 @@ function pruneWorkbookSheets(
   // <definedNames> element up front avoids that recovery prompt.
   outWb = outWb.replace(/<definedNames>[\s\S]*?<\/definedNames>/g, "");
 
+  // <workbookView firstSheet="N" activeTab="M"> — both are 0-based indexes
+  // into the sheet list. After pruning down to (often) a single sheet, a
+  // leftover activeTab="1"/firstSheet="1" points past the end → Excel flags
+  // "Removed Records: Sheet" and repairs the file (blaming the surviving
+  // sheetN.xml). Drop both attributes so they default to 0 — the first
+  // surviving sheet is shown, valid for any kept-sheet count.
+  outWb = outWb
+    .replace(/(<workbookView\b[^>]*?)\s+activeTab="\d+"/g, "$1")
+    .replace(/(<workbookView\b[^>]*?)\s+firstSheet="\d+"/g, "$1");
+
   // Return list of `xl/worksheets/sheet3.xml` paths to drop from the zip
   const droppedSheetFiles = droppedTargets.map(
     (t) => `xl/${t.replace(/^\/+/, "")}`
