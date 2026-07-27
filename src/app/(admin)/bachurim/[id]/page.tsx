@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatILS, formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
+import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
 import { DeleteStudentButton } from "./delete-button";
 import { PromoteStudentButton } from "./promote-button";
 
@@ -100,6 +101,35 @@ export default async function BachurDetailPage({
   });
   const approvedCards = yemotCards.filter((c) => c.status === "מאושר");
 
+  // Effective אש"ל status: booked AND the season hasn't lapsed. The season's
+  // cutoff date lives in EndDateOption(year, endDateLabel).
+  const expiredLabels = await getExpiredEndDateLabels(student.year);
+  const eshelActive = isEshelActive(
+    student.registeredEshel,
+    student.endDateLabel,
+    expiredLabels
+  );
+  const eshelLapsed = student.registeredEshel && !eshelActive;
+  const seasonOption = student.endDateLabel
+    ? await prisma.endDateOption.findUnique({
+        where: {
+          year_label: { year: student.year, label: student.endDateLabel },
+        },
+        select: { date: true },
+      })
+    : null;
+  const seasonDate = seasonOption?.date ?? null;
+  const eshelValue = eshelActive
+    ? "כן"
+    : eshelLapsed
+    ? "לא (פג תוקף)"
+    : "לא";
+  const endDateValue = student.endDateLabel
+    ? seasonDate
+      ? `${student.endDateLabel} · ${seasonDate.toLocaleDateString("he-IL")}`
+      : student.endDateLabel
+    : null;
+
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
@@ -153,7 +183,7 @@ export default async function BachurDetailPage({
               <Field label='אר"י/חו"ל' value={student.ariChul} />
               <Field label="עיר" value={student.city} />
               <Field label="שנה" value={student.year} />
-              <Field label="רשום באש״ל" value={student.registeredEshel ? "כן" : "לא"} />
+              <Field label="רשום באש״ל" value={eshelValue} />
               <Field label="אמצעי תשלום" value={student.paymentMethod} />
               <Field label="תשלומים" value={student.paymentsCount?.toString()} />
               <Field
@@ -164,7 +194,7 @@ export default async function BachurDetailPage({
                   null
                 }
               />
-              <Field label="תאריך סיום" value={student.endDateLabel} />
+              <Field label="תאריך סיום" value={endDateValue} />
               {student.notes && (
                 <div className="col-span-full">
                   <FieldLabel>הערות</FieldLabel>
@@ -491,16 +521,14 @@ export default async function BachurDetailPage({
                 />
                 <KV
                   label='רשום באש"ל'
-                  value={student.registeredEshel ? "כן" : "לא"}
+                  value={eshelValue}
                   tone={
-                    approvedBeds > 0 && !student.registeredEshel
-                      ? "warning"
-                      : "success"
+                    approvedBeds > 0 && !eshelActive ? "warning" : "success"
                   }
                 />
-                {approvedBeds > 0 && !student.registeredEshel && (
+                {approvedBeds > 0 && !eshelActive && (
                   <div className="text-xs text-red-700 pt-2 border-t border-[var(--color-border)]">
-                    ⚠️ הזמין מיטה אך אינו רשום באש״ל
+                    ⚠️ הזמין מיטה אך {eshelLapsed ? "פג תוקף אש״ל" : "אינו רשום באש״ל"}
                   </div>
                 )}
               </div>

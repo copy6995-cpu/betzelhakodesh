@@ -8,6 +8,12 @@
  */
 import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
+import {
+  getExpiredEndDateLabels,
+  activeEshelWhere,
+  notActiveEshelWhere,
+  isEshelActive,
+} from "./eshel";
 
 export type BachurimExportRow = {
   fullName: string;
@@ -135,37 +141,29 @@ type StatusFilter =
   | "eshel-hook"
   | "eshel-no-hook";
 
-function statusWhere(status: StatusFilter | undefined): Record<string, unknown> {
+function statusWhere(
+  status: StatusFilter | undefined,
+  expired: string[]
+): Record<string, unknown> {
+  const active = activeEshelWhere(expired);
+  const notActive = notActiveEshelWhere(expired);
+  const hasHook = { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] };
+  const noHook = { OR: [{ nedarimHook: null }, { nedarimHook: "" }] };
   switch (status) {
     case "no-hook":
-      return { OR: [{ nedarimHook: null }, { nedarimHook: "" }] };
+      return noHook;
     case "no-eshel":
-      return { registeredEshel: false };
+      return notActive;
     case "unattached":
-      return {
-        AND: [
-          { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
-          { registeredEshel: false },
-        ],
-      };
+      return { AND: [noHook, notActive] };
     case "hook":
-      return { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] };
+      return hasHook;
     case "eshel":
-      return { registeredEshel: true };
+      return active;
     case "eshel-hook":
-      return {
-        AND: [
-          { registeredEshel: true },
-          { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] },
-        ],
-      };
+      return { AND: [active, hasHook] };
     case "eshel-no-hook":
-      return {
-        AND: [
-          { registeredEshel: true },
-          { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
-        ],
-      };
+      return { AND: [active, noHook] };
     default:
       return {};
   }
@@ -180,22 +178,29 @@ export async function loadBachurimForExport(opts: {
   rows: BachurimExportRow[];
   byYeshiva: Map<string, BachurimExportRow[]>;
 }> {
+  const expired = await getExpiredEndDateLabels(opts.year);
+  // statusWhere and the search can each contribute an `OR` — keep them in
+  // separate AND slots so neither key overwrites the other.
   const where: Record<string, unknown> = {
     year: opts.year,
     archived: false,
     ...(opts.yeshiva ? { yeshiva: opts.yeshiva } : {}),
-    ...statusWhere(opts.status),
-    ...(opts.q?.trim()
-      ? {
-          OR: [
-            { firstName: { contains: opts.q } },
-            { lastName: { contains: opts.q } },
-            { fatherName: { contains: opts.q } },
-            { personalCode: { contains: opts.q } },
-            { nedarimHook: { contains: opts.q } },
-          ],
-        }
-      : {}),
+    AND: [
+      statusWhere(opts.status, expired),
+      ...(opts.q?.trim()
+        ? [
+            {
+              OR: [
+                { firstName: { contains: opts.q } },
+                { lastName: { contains: opts.q } },
+                { fatherName: { contains: opts.q } },
+                { personalCode: { contains: opts.q } },
+                { nedarimHook: { contains: opts.q } },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   const students = await prisma.student.findMany({
@@ -226,7 +231,7 @@ export async function loadBachurimForExport(opts: {
       paid,
       remaining: price - paid,
       hook: s.nedarimHook,
-      eshel: s.registeredEshel,
+      eshel: isEshelActive(s.registeredEshel, s.endDateLabel, expired),
       parentPhone: s.parent?.phone ?? null,
       parentEmail: s.parent?.email ?? null,
       endDate: s.endDateLabel,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatILS, formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
+import { getExpiredEndDateLabels, activeEshelWhere } from "@/lib/eshel";
 import { SearchBox } from "@/components/search-box";
 import { Pagination } from "@/components/pagination";
 import { CreditCardSyncButton } from "./sync-button";
@@ -20,26 +21,34 @@ type SearchParams = {
 };
 
 async function registrationStats(year: string) {
+  // "Registered" here is the *active* status — a bachur whose season end date
+  // has passed no longer counts, matching the /bachurim page.
+  const expired = await getExpiredEndDateLabels(year);
+  const active = activeEshelWhere(expired);
   const [totalRegistered, yemotCount, nedarimWithHook, nedarimNoHook] =
     await Promise.all([
-      prisma.student.count({ where: { year, registeredEshel: true } }),
+      prisma.student.count({ where: { year, ...active } }),
       prisma.student.count({
-        where: { year, registeredEshel: true, paymentMethod: "ימות המשיח" },
+        where: { year, AND: [active, { paymentMethod: "ימות המשיח" }] },
       }),
       prisma.student.count({
         where: {
           year,
-          registeredEshel: true,
-          paymentMethod: { not: "ימות המשיח" },
-          NOT: [{ nedarimHook: null }, { nedarimHook: "" }],
+          AND: [
+            active,
+            { paymentMethod: { not: "ימות המשיח" } },
+            { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] },
+          ],
         },
       }),
       prisma.student.count({
         where: {
           year,
-          registeredEshel: true,
-          paymentMethod: { not: "ימות המשיח" },
-          OR: [{ nedarimHook: null }, { nedarimHook: "" }],
+          AND: [
+            active,
+            { paymentMethod: { not: "ימות המשיח" } },
+            { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
+          ],
         },
       }),
     ]);

@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
+import {
+  getExpiredEndDateLabels,
+  activeEshelWhere,
+  notActiveEshelWhere,
+} from "@/lib/eshel";
 import { formatILS, formatNum } from "@/lib/utils";
 import { YeshivaPillFilter } from "@/components/yeshiva-pill-filter";
 import { SearchBox } from "@/components/search-box";
@@ -30,38 +35,31 @@ type SearchParams = {
 /** Build the Prisma where clause for a status filter. "unattached" is the
  *  broad "no hook AND no eshel" bucket. "eshel-hook" / "eshel-no-hook"
  *  split the registered-eshel population by whether they also have a
- *  Nedarim hook attached. */
-function statusWhere(status: StatusFilter | undefined): Record<string, unknown> {
+ *  Nedarim hook attached. `expired` are the season labels whose end date has
+ *  passed — a booked bachur in one of those no longer counts as registered. */
+function statusWhere(
+  status: StatusFilter | undefined,
+  expired: string[]
+): Record<string, unknown> {
+  const active = activeEshelWhere(expired);
+  const notActive = notActiveEshelWhere(expired);
+  const hasHook = { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] };
+  const noHook = { OR: [{ nedarimHook: null }, { nedarimHook: "" }] };
   switch (status) {
     case "no-hook":
-      return { OR: [{ nedarimHook: null }, { nedarimHook: "" }] };
+      return noHook;
     case "no-eshel":
-      return { registeredEshel: false };
+      return notActive;
     case "unattached":
-      return {
-        AND: [
-          { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
-          { registeredEshel: false },
-        ],
-      };
+      return { AND: [noHook, notActive] };
     case "hook":
-      return { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] };
+      return hasHook;
     case "eshel":
-      return { registeredEshel: true };
+      return active;
     case "eshel-hook":
-      return {
-        AND: [
-          { registeredEshel: true },
-          { NOT: [{ nedarimHook: null }, { nedarimHook: "" }] },
-        ],
-      };
+      return { AND: [active, hasHook] };
     case "eshel-no-hook":
-      return {
-        AND: [
-          { registeredEshel: true },
-          { OR: [{ nedarimHook: null }, { nedarimHook: "" }] },
-        ],
-      };
+      return { AND: [active, noHook] };
     default:
       return {};
   }
@@ -90,27 +88,35 @@ export default async function BachurimPage({
 }) {
   const sp = await searchParams;
   const year = await getActiveYear();
+  const expired = await getExpiredEndDateLabels(year);
   const yeshiva = sp.yeshiva;
   const q = sp.q?.trim();
   const status = (sp.status ?? "all") as StatusFilter;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
+  // statusWhere can itself contain an `OR` (the active-אש"ל branch), and so
+  // can the search — combine them as separate AND entries so neither `OR`
+  // key clobbers the other.
   const where = {
     year,
     archived: false,
     ...(yeshiva ? { yeshiva } : {}),
-    ...statusWhere(status),
-    ...(q
-      ? {
-          OR: [
-            { firstName: { contains: q} },
-            { lastName: { contains: q} },
-            { fatherName: { contains: q} },
-            { personalCode: { contains: q } },
-            { nedarimHook: { contains: q } },
-          ],
-        }
-      : {}),
+    AND: [
+      statusWhere(status, expired),
+      ...(q
+        ? [
+            {
+              OR: [
+                { firstName: { contains: q } },
+                { lastName: { contains: q } },
+                { fatherName: { contains: q } },
+                { personalCode: { contains: q } },
+                { nedarimHook: { contains: q } },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   // Same base scope as the yeshiva pills — the counts on the status pills
@@ -152,22 +158,22 @@ export default async function BachurimPage({
     Promise.all([
       prisma.student.count({ where: baseWhereWithoutStatus }),
       prisma.student.count({
-        where: { ...baseWhereWithoutStatus, ...statusWhere("no-hook") },
+        where: { ...baseWhereWithoutStatus, ...statusWhere("no-hook", expired) },
       }),
       prisma.student.count({
-        where: { ...baseWhereWithoutStatus, ...statusWhere("no-eshel") },
+        where: { ...baseWhereWithoutStatus, ...statusWhere("no-eshel", expired) },
       }),
       prisma.student.count({
-        where: { ...baseWhereWithoutStatus, ...statusWhere("unattached") },
+        where: { ...baseWhereWithoutStatus, ...statusWhere("unattached", expired) },
       }),
       prisma.student.count({
-        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel-hook") },
+        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel-hook", expired) },
       }),
       prisma.student.count({
-        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel-no-hook") },
+        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel-no-hook", expired) },
       }),
       prisma.student.count({
-        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel") },
+        where: { ...baseWhereWithoutStatus, ...statusWhere("eshel", expired) },
       }),
     ]).then(([all, noHook, noEshel, unattached, eshelHook, eshelNoHook, eshel]) => ({
       all,

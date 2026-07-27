@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { END_DATE_SEASONS } from "@/lib/eshel";
 
 export async function setActiveYear(year: string): Promise<void> {
   if (!year) throw new Error("שנה ריקה");
@@ -45,6 +46,49 @@ export async function renameYeshiva(id: string, name: string): Promise<void> {
   if (!trimmed) throw new Error("שם ריק");
   await prisma.yeshiva.update({ where: { id }, data: { name: trimmed } });
   revalidatePath("/settings/yeshivot");
+}
+
+/** Make sure `year` has a row for each standard season (create-only, no date).
+ *  Idempotent — safe to call on every settings page load. */
+export async function ensureEndDateOptions(year: string): Promise<void> {
+  const existing = await prisma.endDateOption.findMany({
+    where: { year },
+    select: { label: true },
+  });
+  const have = new Set(existing.map((e) => e.label));
+  const missing = END_DATE_SEASONS.filter((l) => !have.has(l));
+  if (missing.length === 0) return;
+  await prisma.endDateOption.createMany({
+    data: missing.map((label) => ({ year, label })),
+  });
+}
+
+/**
+ * Set (or clear) the cutoff date for one season in one year. `dateISO` is a
+ * "YYYY-MM-DD" string from an <input type="date">, or null/"" to clear.
+ * Parsed as local midnight so the day the office picks is the day it flips.
+ */
+export async function saveEndDate(
+  year: string,
+  label: string,
+  dateISO: string | null
+): Promise<void> {
+  if (!year || !label) throw new Error("שנה או תווית חסרות");
+  const date =
+    dateISO && dateISO.trim()
+      ? new Date(`${dateISO.trim()}T00:00:00`)
+      : null;
+  if (date && isNaN(date.getTime())) throw new Error("תאריך שגוי");
+  await prisma.endDateOption.upsert({
+    where: { year_label: { year, label } },
+    update: { date },
+    create: { year, label, date },
+  });
+  // Registration status is derived from these dates everywhere.
+  revalidatePath("/settings");
+  revalidatePath("/bachurim");
+  revalidatePath("/yemot/credit-cards");
+  revalidatePath("/");
 }
 
 // Standard promotion of the school shiur (grade). ט stays at ט — students
