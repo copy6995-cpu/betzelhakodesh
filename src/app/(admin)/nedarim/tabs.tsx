@@ -7,6 +7,7 @@ const TABS = [
   { href: "/nedarim/transactions", label: "עסקאות" },
   { href: "/nedarim/hoks", label: "הוראות קבע" },
   { href: "/nedarim/forms", label: "טפסים" },
+  { href: "/nedarim/duplicates", label: "רישום כפול" },
 ];
 
 export function NedarimTabs() {
