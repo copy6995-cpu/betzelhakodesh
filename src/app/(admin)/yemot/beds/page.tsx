@@ -94,6 +94,12 @@ export default async function BedsPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/yemot/beds/groups"
+            className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"
+          >
+            דוח קבוצות
+          </Link>
           <ManualBedButton roster={roster} weeks={weekOptions} />
           <BedsExportButton
             year={sp.year}
