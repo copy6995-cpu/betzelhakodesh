@@ -151,19 +151,19 @@ export function CalendarGrid({
         <table className="text-sm border-separate border-spacing-0 whitespace-nowrap">
           <thead>
             <tr className="bg-[var(--color-muted)] text-xs">
-              <th rowSpan={2} className="sticky right-0 top-0 z-30 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky right-0 top-0 z-30 bg-[var(--color-muted)] w-[84px] min-w-[84px] py-2 px-2 border-e border-[var(--color-border)]">
                 תאריך
               </th>
-              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky right-[84px] top-0 z-30 bg-[var(--color-muted)] w-[52px] min-w-[52px] py-2 px-2 border-e border-[var(--color-border)]">
                 יום
               </th>
-              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky right-[136px] top-0 z-30 bg-[var(--color-muted)] w-[100px] min-w-[100px] py-2 px-2 border-e border-[var(--color-border)]">
                 תאריך עברי
               </th>
-              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky right-[236px] top-0 z-30 bg-[var(--color-muted)] w-[80px] min-w-[80px] py-2 px-2 border-e border-[var(--color-border)]">
                 פרשה
               </th>
-              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e-2 border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky right-[316px] top-0 z-30 bg-[var(--color-muted)] w-[150px] min-w-[150px] py-2 px-2 border-e-2 border-[var(--color-border)]">
                 הערה
               </th>
               {Array.from({ length: YESHIVA_COUNT }, (_, i) => (
@@ -223,19 +223,19 @@ export function CalendarGrid({
                   key={d.dayKey}
                   className={`[&>td]:border-t [&>td]:border-[var(--color-border)]/40 ${rowBg}`}
                 >
-                  <td className={`sticky right-0 z-10 ${stickyBg} py-1 px-2 font-mono text-xs text-[var(--color-muted-foreground)] border-e border-[var(--color-border)]`}>
+                  <td className={`sticky right-0 z-10 ${stickyBg} w-[84px] min-w-[84px] py-1 px-2 font-mono text-xs text-[var(--color-muted-foreground)] border-e border-[var(--color-border)]`}>
                     {d.greg}
                   </td>
-                  <td className="py-1 px-2 text-xs border-e border-[var(--color-border)]">
+                  <td className={`sticky right-[84px] z-10 ${stickyBg} w-[52px] min-w-[52px] py-1 px-2 text-xs border-e border-[var(--color-border)]`}>
                     {d.dayName}
                   </td>
-                  <td className="py-1 px-2 text-xs border-e border-[var(--color-border)]">
+                  <td className={`sticky right-[136px] z-10 ${stickyBg} w-[100px] min-w-[100px] py-1 px-2 text-xs border-e border-[var(--color-border)]`}>
                     {d.heb}
                   </td>
-                  <td className="py-1 px-2 text-xs border-e border-[var(--color-border)]">
+                  <td className={`sticky right-[236px] z-10 ${stickyBg} w-[80px] min-w-[80px] py-1 px-2 text-xs border-e border-[var(--color-border)]`}>
                     {d.parasha}
                   </td>
-                  <td className="py-1 px-2 text-xs font-medium text-[var(--color-accent)] border-e-2 border-[var(--color-border)]">
+                  <td className={`sticky right-[316px] z-10 ${stickyBg} w-[150px] min-w-[150px] py-1 px-2 text-xs font-medium text-[var(--color-accent)] border-e-2 border-[var(--color-border)] whitespace-normal break-words leading-tight`}>
                     {d.note}
                   </td>
                   {Array.from({ length: YESHIVA_COUNT }, (_, i) => (
