@@ -88,6 +88,25 @@ export function defaultRangeForYear(yearLabel: string): { start: Date; end: Date
   };
 }
 
+/** The parasha (no nikud, no "פרשת" prefix) of the Shabbat in the week that
+ *  starts on `sunday`. "" if none (e.g. a yom-tov week). */
+export function parashaForWeek(sunday: Date): string {
+  const sat = new Date(sunday);
+  sat.setDate(sat.getDate() + 6);
+  const events = HebrewCalendar.calendar({
+    start: sat,
+    end: sat,
+    sedrot: true,
+    il: true,
+  });
+  for (const e of events) {
+    if (e.getFlags() & flags.PARSHA_HASHAVUA) {
+      return clean(e.render("he")).replace(/^פרשת\s*/, "");
+    }
+  }
+  return "";
+}
+
 export function buildCalendarDays(start: Date, end: Date): CalendarDayRow[] {
   if (!(start < end)) return [];
 

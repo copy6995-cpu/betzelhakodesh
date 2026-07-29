@@ -408,16 +408,24 @@ export async function exportRoomsPerYeshiva(opts: {
   return { files, warnings };
 }
 
-/** Bundle every yeshiva's workbook into a single downloadable zip. */
-export async function exportRoomsZip(opts: { weekKey: string }): Promise<{
+/** Bundle every yeshiva's workbook into a single downloadable zip. Each file
+ *  is named "{yeshiva} חדרים {label}" (label optional, e.g. the parasha). */
+export async function exportRoomsZip(opts: {
+  weekKey: string;
+  label?: string;
+}): Promise<{
   buffer: Buffer;
   fileCount: number;
   warnings: string[];
 }> {
-  const { files, warnings } = await exportRoomsPerYeshiva(opts);
+  const { files, warnings } = await exportRoomsPerYeshiva({
+    weekKey: opts.weekKey,
+  });
+  const label = (opts.label ?? "").trim();
   const zip = new JSZip();
   for (const [yeshiva, buf] of files) {
-    const safe = yeshiva.replace(/[<>:"/\\|?*\n\r\t]/g, "_").trim() || "ללא_שם";
+    const base = `${yeshiva} חדרים${label ? ` ${label}` : ""}`;
+    const safe = base.replace(/[<>:"/\\|?*\n\r\t]/g, "_").trim() || "ללא_שם";
     zip.file(`${safe}.xlsx`, buf);
   }
   const buffer = await zip.generateAsync({ type: "nodebuffer" });

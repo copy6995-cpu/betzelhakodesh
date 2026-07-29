@@ -17,9 +17,13 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const raw = url.searchParams.get("week")?.trim();
   const weekKey = raw ? weekKeyOf(new Date(raw)) : currentWeekKey();
+  const label = url.searchParams.get("label")?.trim() || "";
 
   try {
-    const { buffer, fileCount, warnings } = await exportRoomsZip({ weekKey });
+    const { buffer, fileCount, warnings } = await exportRoomsZip({
+      weekKey,
+      label,
+    });
     if (fileCount === 0) {
       return new Response(
         JSON.stringify({ error: "אין שיבוצים לשבוע זה", warnings }),

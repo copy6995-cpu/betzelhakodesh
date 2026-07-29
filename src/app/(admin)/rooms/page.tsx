@@ -2,7 +2,9 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatNum } from "@/lib/utils";
 import { weekKeyOf, currentWeekKey, weekLabel } from "@/lib/weeks";
+import { parashaForWeek } from "@/lib/hebrew-calendar";
 import { RoomAssignmentUI } from "./assignment-ui";
+import { RoomsExportButton } from "./export-button";
 
 export const dynamic = "force-dynamic";
 
@@ -68,12 +70,10 @@ export default async function RoomsPage({
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <a
-            href={`/api/rooms/export?week=${weekKey}`}
-            className="px-4 h-10 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] flex items-center"
-          >
-            ↓ יצוא לפי ישיבה (zip)
-          </a>
+          <RoomsExportButton
+            weekKey={weekKey}
+            defaultLabel={parashaForWeek(new Date(`${weekKey}T00:00:00`))}
+          />
           <Link
             href="/rooms/import"
             className="px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm hover:bg-[var(--color-muted)] flex items-center"
