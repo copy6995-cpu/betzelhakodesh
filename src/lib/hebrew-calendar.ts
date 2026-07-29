@@ -1,23 +1,44 @@
 /**
- * Weekly Hebrew-year rows for the calendar page. One row per Shabbat between
- * a Gregorian start/end range, each carrying an auto Hebrew date, parasha,
- * and special-Shabbat note (Rosh Chodesh, Chanukah, Shirah, the arba
- * parshiyot, HaGadol, Shuva, Chazon, Nachamu, …) computed with @hebcal/core.
+ * Daily Hebrew-year rows for the calendar page. One row PER DAY between a
+ * Gregorian start/end range, each carrying an auto Hebrew date, day-of-week,
+ * parasha (on Shabbat), and a holiday/notable-day note — Rosh Hashana, Yom
+ * Kippur, Sukkot (incl. chol hamoed + Hoshana Rabba), Shmini Atzeret,
+ * Chanukah night-by-night, Purim, Pesach, Shavuot, the fasts, Rosh Chodesh,
+ * and the special Shabbatot — computed with @hebcal/core.
  */
 import { HDate, HebrewCalendar, flags } from "@hebcal/core";
 
-export type CalendarWeekRow = {
-  /** Shabbat's ISO date, also the DB weekKey. */
-  weekKey: string;
+export type CalendarDayRow = {
+  /** The day's ISO date, also the DB key. */
+  dayKey: string;
   /** Gregorian date, dd/mm/yyyy. */
   greg: string;
-  /** Hebrew date, no nikud (e.g. "25 אב תשפ״ו"). */
+  /** Hebrew weekday name (ראשון…שבת). */
+  dayName: string;
+  /** Hebrew date, no nikud. */
   heb: string;
-  /** Weekly parasha, no nikud. */
+  /** Weekly parasha (Shabbat rows only), no nikud. */
   parasha: string;
-  /** Special-Shabbat note(s), joined by " · " ("" when none). */
+  /** Holiday / notable-day note(s), joined by " · " ("" when none). */
   note: string;
+  isShabbat: boolean;
+  isYomTov: boolean;
 };
+
+const DOW = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
+/** Flags whose events belong in the note column. */
+const NOTE_MASK =
+  flags.CHAG |
+  flags.CHOL_HAMOED |
+  flags.ROSH_CHODESH |
+  flags.MINOR_HOLIDAY |
+  flags.MAJOR_FAST |
+  flags.MINOR_FAST |
+  flags.SPECIAL_SHABBAT;
+
+/** Obscure custom "holidays" @hebcal emits that clutter an office calendar. */
+const NOTE_BLOCK = /למעשר בהמה|חג הבנות|סליחות|שבת מברכים|יום כיפור קטן/;
 
 /** Strip nikud + cantillation (all NFD nonspacing marks), turn the Hebrew
  *  maqaf into a space, collapse whitespace. */
@@ -67,7 +88,7 @@ export function defaultRangeForYear(yearLabel: string): { start: Date; end: Date
   };
 }
 
-export function buildCalendarWeeks(start: Date, end: Date): CalendarWeekRow[] {
+export function buildCalendarDays(start: Date, end: Date): CalendarDayRow[] {
   if (!(start < end)) return [];
 
   const events = HebrewCalendar.calendar({
@@ -85,45 +106,33 @@ export function buildCalendarWeeks(start: Date, end: Date): CalendarWeekRow[] {
   }
 
   const endHD = new HDate(end);
-  // First Shabbat on/after start.
-  let hd = new HDate(start);
-  while (hd.getDay() !== 6) hd = hd.next();
-
-  const rows: CalendarWeekRow[] = [];
-  for (; hd.abs() <= endHD.abs(); hd = hd.add(7, "d")) {
+  const rows: CalendarDayRow[] = [];
+  for (let hd = new HDate(start); hd.abs() <= endHD.abs(); hd = hd.add(1, "d")) {
     const key = isoOf(hd);
     const evs = byDay.get(key) ?? [];
     let parasha = "";
+    let isYomTov = false;
     const notes: string[] = [];
-    let rch: string | null = null;
-    let chanukah = false;
     for (const e of evs) {
       const f = e.getFlags();
       const name = clean(e.render("he"));
       if (f & flags.PARSHA_HASHAVUA) {
         parasha = name.replace(/^פרשת\s*/, "");
-      } else if (f & flags.SPECIAL_SHABBAT) {
+      } else if (f & NOTE_MASK && !NOTE_BLOCK.test(name)) {
         notes.push(name);
-      } else if (f & flags.ROSH_CHODESH) {
-        rch = name.replace(/^ראש חודש\s*/, 'ר"ח ');
-      } else if (
-        f & (flags.CHANUKAH_CANDLES | flags.MINOR_HOLIDAY) &&
-        /חנוכה/.test(name)
-      ) {
-        chanukah = true;
       }
-    }
-    if (rch) notes.unshift(`שבת ${rch}`);
-    if (chanukah && !notes.some((n) => /חנוכה/.test(n))) {
-      notes.push("שבת חנוכה");
+      if (f & flags.CHAG) isYomTov = true;
     }
 
     rows.push({
-      weekKey: key,
+      dayKey: key,
       greg: dmyOf(key),
+      dayName: DOW[hd.getDay()],
       heb: clean(hd.render("he")),
       parasha,
       note: notes.join(" · "),
+      isShabbat: hd.getDay() === 6,
+      isYomTov,
     });
   }
   return rows;

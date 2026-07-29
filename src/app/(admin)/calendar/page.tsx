@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
 import {
-  buildCalendarWeeks,
+  buildCalendarDays,
   defaultRangeForYear,
 } from "@/lib/hebrew-calendar";
 import { CalendarGrid, type WeekValues } from "./grid";
@@ -36,7 +36,7 @@ export default async function CalendarPage() {
     }
   })();
 
-  const weeks = buildCalendarWeeks(range.start, range.end);
+  const days = buildCalendarDays(range.start, range.end);
 
   const savedRows = await prisma.calendarWeek.findMany({
     where: { yearLabel },
@@ -58,7 +58,7 @@ export default async function CalendarPage() {
           לוח שנה
         </h1>
         <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
-          {weeks.length} שבתות · {yearLabel}. תאריך עברי, פרשה והערות השבת
+          {days.length} ימים · {yearLabel}. תאריך עברי, יום, פרשה וחגים
           מחושבים אוטומטית. שאר העמודות נשמרות עם היציאה מהתא.
         </p>
       </div>
@@ -68,7 +68,7 @@ export default async function CalendarPage() {
         startISO={isoOf(range.start)}
         endISO={isoOf(range.end)}
         supervisorNames={supervisorNames}
-        weeks={weeks}
+        days={days}
         savedValues={savedValues}
       />
     </div>

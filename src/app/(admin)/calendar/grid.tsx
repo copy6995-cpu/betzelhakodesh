@@ -2,7 +2,7 @@
 
 import { Fragment, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { CalendarWeekRow } from "@/lib/hebrew-calendar";
+import type { CalendarDayRow } from "@/lib/hebrew-calendar";
 import { saveCalendarConfig, saveCalendarWeek } from "./actions";
 
 const SUP_COUNT = 9;
@@ -47,14 +47,14 @@ export function CalendarGrid({
   startISO,
   endISO,
   supervisorNames,
-  weeks,
+  days,
   savedValues,
 }: {
   yearLabel: string;
   startISO: string;
   endISO: string;
   supervisorNames: string[];
-  weeks: CalendarWeekRow[];
+  days: CalendarDayRow[];
   savedValues: Record<string, Partial<WeekValues>>;
 }) {
   const router = useRouter();
@@ -64,7 +64,7 @@ export function CalendarGrid({
   // Mutable stores — typing updates refs (no re-render); blur persists.
   const valuesRef = useRef<Record<string, WeekValues>>(
     Object.fromEntries(
-      weeks.map((w) => [w.weekKey, normalize(savedValues[w.weekKey])])
+      days.map((d) => [d.dayKey, normalize(savedValues[d.dayKey])])
     )
   );
   const rangeRef = useRef({ start: startISO, end: endISO });
@@ -153,6 +153,9 @@ export function CalendarGrid({
                 תאריך
               </th>
               <th rowSpan={2} className="py-2 px-2 border-e border-[var(--color-border)]">
+                יום
+              </th>
+              <th rowSpan={2} className="py-2 px-2 border-e border-[var(--color-border)]">
                 תאריך עברי
               </th>
               <th rowSpan={2} className="py-2 px-2 border-e border-[var(--color-border)]">
@@ -200,28 +203,45 @@ export function CalendarGrid({
             </tr>
           </thead>
           <tbody>
-            {weeks.map((w) => {
-              const v = valuesRef.current[w.weekKey];
+            {days.map((d) => {
+              const v = valuesRef.current[d.dayKey];
+              const rowBg = d.isYomTov
+                ? "bg-amber-50"
+                : d.isShabbat
+                ? "bg-blue-50"
+                : "";
+              const stickyBg = d.isYomTov
+                ? "bg-amber-50"
+                : d.isShabbat
+                ? "bg-blue-50"
+                : "bg-white";
+              const save = () => saveWeek(d.dayKey);
               return (
-                <tr key={w.weekKey} className="border-t border-[var(--color-border)]/40">
-                  <td className="sticky right-0 z-10 bg-white py-1 px-2 font-mono text-xs text-[var(--color-muted-foreground)] border-e border-[var(--color-border)]">
-                    {w.greg}
+                <tr
+                  key={d.dayKey}
+                  className={`border-t border-[var(--color-border)]/40 ${rowBg}`}
+                >
+                  <td className={`sticky right-0 z-10 ${stickyBg} py-1 px-2 font-mono text-xs text-[var(--color-muted-foreground)] border-e border-[var(--color-border)]`}>
+                    {d.greg}
                   </td>
                   <td className="py-1 px-2 text-xs border-e border-[var(--color-border)]">
-                    {w.heb}
+                    {d.dayName}
                   </td>
                   <td className="py-1 px-2 text-xs border-e border-[var(--color-border)]">
-                    {w.parasha}
+                    {d.heb}
+                  </td>
+                  <td className="py-1 px-2 text-xs border-e border-[var(--color-border)]">
+                    {d.parasha}
                   </td>
                   <td className="py-1 px-2 text-xs font-medium text-[var(--color-accent)] border-e-2 border-[var(--color-border)]">
-                    {w.note}
+                    {d.note}
                   </td>
                   {Array.from({ length: YESHIVA_COUNT }, (_, i) => (
                     <td key={i} className="p-0 border-s border-[var(--color-border)]/30">
                       <input
                         defaultValue={v.yeshivot[i]}
                         onChange={(e) => (v.yeshivot[i] = e.target.value)}
-                        onBlur={() => saveWeek(w.weekKey)}
+                        onBlur={save}
                         className={cellInput}
                       />
                     </td>
@@ -230,7 +250,7 @@ export function CalendarGrid({
                     <input
                       defaultValue={v.linaChul}
                       onChange={(e) => (v.linaChul = e.target.value)}
-                      onBlur={() => saveWeek(w.weekKey)}
+                      onBlur={save}
                       className={cellInput}
                     />
                   </td>
@@ -238,7 +258,7 @@ export function CalendarGrid({
                     <input
                       defaultValue={v.linaAri}
                       onChange={(e) => (v.linaAri = e.target.value)}
-                      onBlur={() => saveWeek(w.weekKey)}
+                      onBlur={save}
                       className={cellInput}
                     />
                   </td>
@@ -248,7 +268,7 @@ export function CalendarGrid({
                         <input
                           defaultValue={v.sup[i].lina}
                           onChange={(e) => (v.sup[i].lina = e.target.value)}
-                          onBlur={() => saveWeek(w.weekKey)}
+                          onBlur={save}
                           className={cellInput}
                         />
                       </td>
@@ -256,7 +276,7 @@ export function CalendarGrid({
                         <input
                           defaultValue={v.sup[i].kima}
                           onChange={(e) => (v.sup[i].kima = e.target.value)}
-                          onBlur={() => saveWeek(w.weekKey)}
+                          onBlur={save}
                           className={cellInput}
                         />
                       </td>
