@@ -251,13 +251,48 @@ function mapSheetNameToFile(
   return out;
 }
 
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Give a sheet a centered, bold print header (shows only when printing).
+ * Header-code chars (& and ") are themselves XML-escaped. Placed after
+ * pageSetup / pageMargins to satisfy the worksheet child-element order;
+ * replaces an existing <headerFooter> if present.
+ */
+function injectPrintHeader(xml: string, title: string): string {
+  const hf = `<headerFooter><oddHeader>&amp;C&amp;&quot;-,Bold&quot;&amp;14${escapeXml(
+    title
+  )}</oddHeader></headerFooter>`;
+  if (/<headerFooter[\s>]/.test(xml)) {
+    return xml.replace(
+      /<headerFooter[^>]*\/>|<headerFooter[\s\S]*?<\/headerFooter>/,
+      hf
+    );
+  }
+  if (/<pageSetup\b[^>]*\/>/.test(xml)) {
+    return xml.replace(/(<pageSetup\b[^>]*\/>)/, `$1${hf}`);
+  }
+  if (/<pageMargins\b[^>]*\/>/.test(xml)) {
+    return xml.replace(/(<pageMargins\b[^>]*\/>)/, `$1${hf}`);
+  }
+  return xml.replace(/<\/worksheet>/, `${hf}</worksheet>`);
+}
+
 /**
  * Build one .xlsx buffer per yeshiva that has rooms assigned in the given
  * week. Preserves the source workbook byte-for-byte except for the
- * clear/drop edits above.
+ * clear/drop edits above. `label` (optional) becomes part of each sheet's
+ * print header ("{yeshiva} חדרים {label}").
  */
 export async function exportRoomsPerYeshiva(opts: {
   weekKey: string;
+  label?: string;
 }): Promise<{
   files: Map<string, Buffer>;
   warnings: string[];
@@ -345,6 +380,12 @@ export async function exportRoomsPerYeshiva(opts: {
         /(<pageSetup\b[^>]*?)\s+r:id="[^"]*"/g,
         "$1"
       );
+      // Print header/title so a printed sheet is labelled.
+      const label = (opts.label ?? "").trim();
+      xml = injectPrintHeader(
+        xml,
+        `${yeshiva} חדרים${label ? ` ${label}` : ""}`
+      );
       zip.file(filePath, xml);
     }
 
@@ -420,6 +461,7 @@ export async function exportRoomsZip(opts: {
 }> {
   const { files, warnings } = await exportRoomsPerYeshiva({
     weekKey: opts.weekKey,
+    label: opts.label,
   });
   const label = (opts.label ?? "").trim();
   const zip = new JSZip();
