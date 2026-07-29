@@ -86,7 +86,7 @@ export function ManualBedButton({
           setOpen(true);
         }}
         disabled={weeks.length === 0}
-        className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+        className="inline-flex items-center px-4 h-10 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
         title={weeks.length === 0 ? "אין שבועות — סנכרן קודם" : undefined}
       >
         + רישום ידני

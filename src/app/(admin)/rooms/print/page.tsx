@@ -121,7 +121,7 @@ export default async function RoomsPrintPage({
                     {anyCapacity ? ` · ${bedCount} מיטות` : ""}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                <div className="flex flex-col gap-3">
                   {[...buildings.entries()].map(([building, units]) => (
                     <div key={building} className="break-inside-avoid">
                       <h3 className="font-semibold text-sm mb-1 text-[var(--color-foreground)]">

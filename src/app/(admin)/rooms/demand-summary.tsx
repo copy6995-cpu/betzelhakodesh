@@ -35,7 +35,7 @@ export function RoomDemandSummary({
   ] as const;
 
   return (
-    <div className="sticky top-0 z-30 mb-4 bg-white rounded-xl card-shadow overflow-x-auto">
+    <div className="sticky top-16 z-30 mb-4 bg-white rounded-xl card-shadow overflow-x-auto">
       <table className="w-full text-xs border-separate border-spacing-0">
         <thead>
           <tr className="bg-[var(--color-primary)] text-white">
