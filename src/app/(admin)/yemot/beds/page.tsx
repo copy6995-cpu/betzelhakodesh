@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
+import { loadBedsMatrix, shortDate } from "@/lib/beds-matrix";
 import { SyncBedsButton } from "./sync-beds";
+import { BedsExportButton } from "./export-button";
 
 export const dynamic = "force-dynamic";
 
@@ -15,35 +16,12 @@ type SearchParams = {
   // whose personalCode isn't in the current-year roster
 };
 
-/** Parse "dd/mm/yyyy" (Yemot's date format) into a JS Date. Null on bad input. */
-function parseDmyLocal(d: string | null | undefined): Date | null {
-  if (!d) return null;
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d);
-  if (!m) return null;
-  return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
-}
-
 /** Parse a "YYYY-MM-DD" query param into a Date at local midnight. */
 function parseISODateLocal(s: string | null | undefined): Date | null {
   if (!s) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
   if (!m) return null;
   return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
-}
-
-/** Convert "dd/mm/yyyy" to a sortable numeric key. */
-function dateKey(d: string | null | undefined): number {
-  if (!d) return 0;
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d);
-  if (!m) return 0;
-  return parseInt(m[3] + m[2] + m[1], 10);
-}
-
-/** Turn "dd/mm/yyyy" into "dd/mm/yy". */
-function shortDate(d: string | null | undefined): string {
-  if (!d) return "";
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d);
-  return m ? `${m[1]}/${m[2]}/${m[3].slice(-2)}` : d;
 }
 
 export default async function BedsPage({
@@ -58,163 +36,20 @@ export default async function BedsPage({
   const fromDate = parseISODateLocal(sp.from);
   const toDate = parseISODateLocal(sp.to);
 
-  const [reservationsRaw, students] = await Promise.all([
-    prisma.yemotBedReservation.findMany({
-      orderBy: [{ weekKey: "asc" }, { personalCode: "asc" }],
-    }),
-    prisma.student.findMany({
-      where: { year: activeYear, archived: false },
-      select: {
-        id: true,
-        personalCode: true,
-        firstName: true,
-        lastName: true,
-        yeshiva: true,
-        shiur: true,
-        registeredEshel: true,
-      },
-    }),
-  ]);
-
-  // Filter reservations by date range and (optionally) by whether the
-  // student is in the active-year roster. The date filter is applied to
-  // the reservation's `date` field (dd/mm/yyyy in Yemot's format).
-  const yearCodes = new Set(students.map((s) => s.personalCode));
-  const reservations = reservationsRaw.filter((r) => {
-    if (scope === "year" && !yearCodes.has(r.personalCode)) return false;
-    if (fromDate || toDate) {
-      const d = parseDmyLocal(r.date);
-      if (!d) return false;
-      if (fromDate && d < fromDate) return false;
-      if (toDate) {
-        const endOfDay = new Date(toDate.getTime() + 24 * 3600 * 1000 - 1);
-        if (d > endOfDay) return false;
-      }
-    }
-    return true;
+  const {
+    weeks,
+    rows: filtered,
+    cells: cellsByStudent,
+    totalByWeek,
+    grandTotal,
+    reservationCount,
+  } = await loadBedsMatrix({
+    activeYear,
+    scope: scope === "all" ? "all" : "year",
+    filter: filter === "not-registered" ? "not-registered" : "",
+    from: fromDate,
+    to: toDate,
   });
-
-  // Determine the last "approved" reservation per week — its date is the
-  // week's representative label (mirrors the Google Sheets script).
-  const weekMeta = new Map<
-    string,
-    { latestDate: string | null; hebDate: string | null }
-  >();
-  for (const r of reservations) {
-    if (r.status !== "מאושר") continue;
-    const cur = weekMeta.get(r.weekKey);
-    if (!cur || dateKey(r.date) > dateKey(cur.latestDate)) {
-      weekMeta.set(r.weekKey, {
-        latestDate: r.date,
-        hebDate: r.hebDate ?? null,
-      });
-    }
-  }
-  const weeks = Array.from(weekMeta.entries())
-    .sort(
-      (a, b) => dateKey(a[1].latestDate) - dateKey(b[1].latestDate)
-    )
-    .map(([weekKey, meta]) => ({ weekKey, ...meta }));
-
-  // Index reservations per student × week.
-  type Cell = { status: "approved" | "outofstock" | null; date: string | null };
-  const cellsByStudent = new Map<string, Map<string, Cell>>();
-  for (const r of reservations) {
-    const s = cellsByStudent.get(r.personalCode) ?? new Map<string, Cell>();
-    const existing = s.get(r.weekKey);
-    // Approved wins over out-of-stock. Otherwise, keep the newest date.
-    let cell: Cell = { status: null, date: r.date };
-    if (r.status === "מאושר") cell.status = "approved";
-    else if (r.status === "אזל") cell.status = "outofstock";
-    if (existing) {
-      if (existing.status === "approved") cell = existing;
-      else if (
-        cell.status === null &&
-        dateKey(r.date) < dateKey(existing.date)
-      )
-        cell = existing;
-    }
-    s.set(r.weekKey, cell);
-    cellsByStudent.set(r.personalCode, s);
-  }
-
-  // Roster: current-year students + any student who has a reservation but no
-  // matching Student row (fallback so we still show them).
-  type Row = {
-    code: string;
-    name: string;
-    yeshiva: string;
-    shiur: string | null;
-    registeredEshel: boolean | null;
-    approvedCount: number;
-    fromRoster: boolean;
-  };
-  const byCode = new Map(students.map((s) => [s.personalCode, s]));
-  const rows: Row[] = [];
-  for (const s of students) {
-    const cells = cellsByStudent.get(s.personalCode);
-    let approvedCount = 0;
-    if (cells) {
-      for (const w of weeks) {
-        const c = cells.get(w.weekKey);
-        if (c?.status === "approved") approvedCount++;
-      }
-    }
-    rows.push({
-      code: s.personalCode,
-      name: `${s.lastName} ${s.firstName}`,
-      yeshiva: s.yeshiva,
-      shiur: s.shiur,
-      registeredEshel: s.registeredEshel,
-      approvedCount,
-      fromRoster: true,
-    });
-  }
-  const extra = new Set<string>();
-  for (const r of reservations) {
-    if (!byCode.has(r.personalCode) && !extra.has(r.personalCode)) {
-      extra.add(r.personalCode);
-      const cells = cellsByStudent.get(r.personalCode);
-      let approvedCount = 0;
-      if (cells) {
-        for (const w of weeks) {
-          const c = cells.get(w.weekKey);
-          if (c?.status === "approved") approvedCount++;
-        }
-      }
-      rows.push({
-        code: r.personalCode,
-        name: r.name ?? "(לא ידוע)",
-        yeshiva: r.branch ?? "",
-        shiur: r.className ?? null,
-        registeredEshel: null,
-        approvedCount,
-        fromRoster: false,
-      });
-    }
-  }
-
-  // Filter: only students who ordered but aren't registered in Eshel.
-  const filtered =
-    filter === "not-registered"
-      ? rows.filter((r) => r.approvedCount > 0 && r.registeredEshel === false)
-      : rows;
-  filtered.sort((a, b) =>
-    `${a.yeshiva}${a.name}`.localeCompare(`${b.yeshiva}${b.name}`, "he")
-  );
-
-  // Per-week total counts for the summary row.
-  const totalByWeek: Record<string, number> = {};
-  for (const w of weeks) totalByWeek[w.weekKey] = 0;
-  for (const row of filtered) {
-    const cells = cellsByStudent.get(row.code);
-    if (!cells) continue;
-    for (const w of weeks) {
-      const c = cells.get(w.weekKey);
-      if (c?.status === "approved") totalByWeek[w.weekKey]++;
-    }
-  }
-  const grandTotal = Object.values(totalByWeek).reduce((a, b) => a + b, 0);
 
   return (
     <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -229,12 +64,21 @@ export default async function BedsPage({
             הזמנות מיטה
           </h1>
           <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
-            {formatNum(reservations.length)} רשומות · {weeks.length} שבועות ·{" "}
+            {formatNum(reservationCount)} רשומות · {weeks.length} שבועות ·{" "}
             {formatNum(filtered.length)} תלמידים בתצוגה
             {scope === "year" && ` · תלמידי ${activeYear} בלבד`}
           </p>
         </div>
-        <SyncBedsButton />
+        <div className="flex items-center gap-2">
+          <BedsExportButton
+            year={sp.year}
+            scope={scope}
+            filter={filter}
+            from={sp.from}
+            to={sp.to}
+          />
+          <SyncBedsButton />
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
