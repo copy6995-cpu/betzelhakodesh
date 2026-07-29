@@ -145,41 +145,43 @@ export function CalendarGrid({
         </span>
       </div>
 
-      <div className="bg-white rounded-xl card-shadow overflow-x-auto">
-        <table className="text-sm border-collapse whitespace-nowrap">
+      <div className="bg-white rounded-xl card-shadow overflow-auto max-h-[calc(100vh-14rem)]">
+        {/* border-separate (not collapse) — collapse breaks position:sticky on
+            <th> in Chromium, so the header wouldn't stay pinned on scroll. */}
+        <table className="text-sm border-separate border-spacing-0 whitespace-nowrap">
           <thead>
             <tr className="bg-[var(--color-muted)] text-xs">
-              <th rowSpan={2} className="sticky right-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky right-0 top-0 z-30 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
                 תאריך
               </th>
-              <th rowSpan={2} className="py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
                 יום
               </th>
-              <th rowSpan={2} className="py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
                 תאריך עברי
               </th>
-              <th rowSpan={2} className="py-2 px-2 border-e border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e border-[var(--color-border)]">
                 פרשה
               </th>
-              <th rowSpan={2} className="py-2 px-2 border-e-2 border-[var(--color-border)]">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e-2 border-[var(--color-border)]">
                 הערה
               </th>
               {Array.from({ length: YESHIVA_COUNT }, (_, i) => (
-                <th key={i} rowSpan={2} className="py-2 px-2 font-normal">
+                <th key={i} rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 font-normal">
                   ישיבה {i + 1}
                 </th>
               ))}
-              <th rowSpan={2} className="py-2 px-2 border-s border-[var(--color-border)] font-normal">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-s border-[var(--color-border)] font-normal">
                 לינה חו״ל
               </th>
-              <th rowSpan={2} className="py-2 px-2 border-e-2 border-[var(--color-border)] font-normal">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e-2 border-[var(--color-border)] font-normal">
                 לינה אר״י
               </th>
               {Array.from({ length: SUP_COUNT }, (_, i) => (
                 <th
                   key={i}
                   colSpan={2}
-                  className="py-1 px-1 border-s border-[var(--color-border)] text-center"
+                  className="sticky top-0 z-20 bg-[var(--color-muted)] h-9 py-1 px-1 border-s border-[var(--color-border)] text-center"
                 >
                   <input
                     defaultValue={supervisorNames[i] ?? ""}
@@ -194,10 +196,10 @@ export function CalendarGrid({
             <tr className="bg-[var(--color-muted)] text-[10px] text-[var(--color-muted-foreground)]">
               {Array.from({ length: SUP_COUNT }, (_, i) => (
                 <Fragment key={i}>
-                  <th className="py-1 px-1 border-s border-[var(--color-border)] font-normal">
+                  <th className="sticky top-9 z-20 bg-[var(--color-muted)] h-6 py-1 px-1 border-s border-[var(--color-border)] font-normal">
                     לינה
                   </th>
-                  <th className="py-1 px-1 font-normal">קימה</th>
+                  <th className="sticky top-9 z-20 bg-[var(--color-muted)] h-6 py-1 px-1 font-normal">קימה</th>
                 </Fragment>
               ))}
             </tr>
@@ -219,7 +221,7 @@ export function CalendarGrid({
               return (
                 <tr
                   key={d.dayKey}
-                  className={`border-t border-[var(--color-border)]/40 ${rowBg}`}
+                  className={`[&>td]:border-t [&>td]:border-[var(--color-border)]/40 ${rowBg}`}
                 >
                   <td className={`sticky right-0 z-10 ${stickyBg} py-1 px-2 font-mono text-xs text-[var(--color-muted-foreground)] border-e border-[var(--color-border)]`}>
                     {d.greg}

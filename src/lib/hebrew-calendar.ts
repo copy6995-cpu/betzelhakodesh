@@ -128,7 +128,8 @@ export function buildCalendarDays(start: Date, end: Date): CalendarDayRow[] {
       dayKey: key,
       greg: dmyOf(key),
       dayName: DOW[hd.getDay()],
-      heb: clean(hd.render("he")),
+      // Hebrew date in gematriya letters ("כ״ב אב תשפ״ו") rather than digits.
+      heb: clean(hd.renderGematriya(true)),
       parasha,
       note: notes.join(" · "),
       isShabbat: hd.getDay() === 6,
