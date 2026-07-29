@@ -9,7 +9,7 @@
  * "report by group" ask and the "count each registrant once" ask.
  */
 import { prisma } from "./prisma";
-import { dateKey } from "./beds-matrix";
+import { dateKey, shortDate } from "./beds-matrix";
 import { loadCancellations, isLiveBooking } from "./bed-cancellations";
 
 export type BedGroupRow = {
@@ -20,7 +20,10 @@ export type BedGroupRow = {
   notInRoster: number; // booked but not an active-year student
   alsoInOtherGroup: number; // of `students`, how many also booked elsewhere
   payment: number; // ₪ — approved Yemot card charges by these students
+  bookedThisWeek: number; // subscribers ("regulars") who booked the selected week
 };
+
+export type BedGroupWeek = { weekKey: string; label: string };
 
 export type BedGroupReport = {
   rows: BedGroupRow[];
@@ -30,8 +33,11 @@ export type BedGroupReport = {
     nonSubscribers: number;
     notInRoster: number;
     payment: number;
+    bookedThisWeek: number;
   };
   crossGroupStudents: number; // total students who booked in >1 group
+  weeks: BedGroupWeek[]; // selectable weeks (newest first)
+  selectedWeek: string | null;
 };
 
 function rawGroup(raw: string): string {
@@ -45,7 +51,8 @@ function rawGroup(raw: string): string {
 }
 
 export async function loadBedGroupReport(
-  activeYear: string
+  activeYear: string,
+  weekKey?: string
 ): Promise<BedGroupReport> {
   const [reservationsRaw, students, charges, cancellations] = await Promise.all([
     prisma.yemotBedReservation.findMany({
@@ -72,6 +79,27 @@ export async function loadBedGroupReport(
   // Drop cancellation rows + weeks a cancellation voided.
   const reservations = reservationsRaw.filter((r) =>
     isLiveBooking(r, cancellations)
+  );
+
+  // Selectable weeks (latest booking date per week key), newest first.
+  const weekLatest = new Map<string, number>();
+  const weekRepr = new Map<string, string>();
+  for (const r of reservations) {
+    const dk = dateKey(r.date);
+    if (dk >= (weekLatest.get(r.weekKey) ?? 0)) {
+      weekLatest.set(r.weekKey, dk);
+      weekRepr.set(r.weekKey, shortDate(r.date) || r.weekKey);
+    }
+  }
+  const weeks: BedGroupWeek[] = [...weekLatest.keys()]
+    .sort((a, b) => (weekLatest.get(b) ?? 0) - (weekLatest.get(a) ?? 0))
+    .map((wk) => ({ weekKey: wk, label: weekRepr.get(wk) ?? wk }));
+  const selectedWeek =
+    weekKey && weekLatest.has(weekKey) ? weekKey : weeks[0]?.weekKey ?? null;
+  const bookedThisWeekCodes = new Set(
+    reservations
+      .filter((r) => r.weekKey === selectedWeek)
+      .map((r) => r.personalCode)
   );
 
   const eshelByCode = new Map(
@@ -119,6 +147,7 @@ export async function loadBedGroupReport(
         notInRoster: 0,
         alsoInOtherGroup: 0,
         payment: 0,
+        bookedThisWeek: 0,
       };
       rowMap.set(g, row);
     }
@@ -144,8 +173,11 @@ export async function loadBedGroupReport(
     if (multi) row.alsoInOtherGroup++;
     const eshel = eshelByCode.get(code);
     if (eshel === undefined) row.notInRoster++;
-    else if (eshel === true) row.subscribers++;
-    else row.nonSubscribers++;
+    else if (eshel === true) {
+      row.subscribers++;
+      // "regulars" who actually booked the selected week
+      if (bookedThisWeekCodes.has(code)) row.bookedThisWeek++;
+    } else row.nonSubscribers++;
     row.payment += paymentByCode.get(code) ?? 0;
   }
 
@@ -159,9 +191,17 @@ export async function loadBedGroupReport(
       nonSubscribers: t.nonSubscribers + r.nonSubscribers,
       notInRoster: t.notInRoster + r.notInRoster,
       payment: t.payment + r.payment,
+      bookedThisWeek: t.bookedThisWeek + r.bookedThisWeek,
     }),
-    { students: 0, subscribers: 0, nonSubscribers: 0, notInRoster: 0, payment: 0 }
+    {
+      students: 0,
+      subscribers: 0,
+      nonSubscribers: 0,
+      notInRoster: 0,
+      payment: 0,
+      bookedThisWeek: 0,
+    }
   );
 
-  return { rows, totals, crossGroupStudents };
+  return { rows, totals, crossGroupStudents, weeks, selectedWeek };
 }
