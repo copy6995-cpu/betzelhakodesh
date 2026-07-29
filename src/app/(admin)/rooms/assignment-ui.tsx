@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { RoomUnit } from "@/lib/rooms";
 import {
   assignRooms,
   unassignRoom,
@@ -9,8 +10,7 @@ import {
   copyFromWeek,
 } from "./actions";
 
-type Room = { id: string; code: string; assignedTo: string | null };
-type Building = { building: string; rooms: Room[] };
+type Building = { building: string; units: RoomUnit[] };
 
 const PALETTE = [
   "#FDE68A", "#BFDBFE", "#BBF7D0", "#FBCFE8", "#DDD6FE",
@@ -52,25 +52,38 @@ export function RoomAssignmentUI({
   const [weekPicker, setWeekPicker] = useState(weekKey);
 
   const totalRooms = useMemo(
-    () => buildings.reduce((n, b) => n + b.rooms.length, 0),
+    () => buildings.reduce((n, b) => n + b.units.length, 0),
     [buildings]
   );
 
-  function toggleRoom(id: string) {
+  // Map each unit key to its room ids so a linked pair assigns/clears together.
+  const roomIdsByKey = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const b of buildings) for (const u of b.units) m.set(u.key, u.roomIds);
+    return m;
+  }, [buildings]);
+
+  function toggleUnit(key: string) {
     const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     setSelected(next);
   }
 
   function selectAllUnassignedIn(building: Building) {
     const next = new Set(selected);
-    for (const r of building.rooms) if (!r.assignedTo) next.add(r.id);
+    for (const u of building.units) if (!u.assignedTo) next.add(u.key);
     setSelected(next);
   }
 
   function clearSelection() {
     setSelected(new Set());
+  }
+
+  function selectedRoomIds(): string[] {
+    const ids: string[] = [];
+    for (const key of selected) ids.push(...(roomIdsByKey.get(key) ?? []));
+    return ids;
   }
 
   function doAssign() {
@@ -85,13 +98,14 @@ export function RoomAssignmentUI({
     setMsg(null);
     startTransition(async () => {
       try {
-        const r = await assignRooms({
+        await assignRooms({
           weekKey,
           yeshiva: targetYeshiva,
-          roomIds: [...selected],
+          roomIds: selectedRoomIds(),
         });
+        const units = selected.size;
         setSelected(new Set());
-        setMsg({ tone: "ok", text: `שובצו ${r.assigned} חדרים ל-${targetYeshiva}` });
+        setMsg({ tone: "ok", text: `שובצו ${units} חדרים ל-${targetYeshiva}` });
         router.refresh();
       } catch (err) {
         setMsg({ tone: "err", text: err instanceof Error ? err.message : "שגיאה" });
@@ -99,11 +113,11 @@ export function RoomAssignmentUI({
     });
   }
 
-  function doUnassign(roomId: string) {
+  function doUnassignUnit(unit: RoomUnit) {
     startTransition(async () => {
-      await unassignRoom(weekKey, roomId);
+      for (const roomId of unit.roomIds) await unassignRoom(weekKey, roomId);
       const next = new Set(selected);
-      next.delete(roomId);
+      next.delete(unit.key);
       setSelected(next);
       router.refresh();
     });
@@ -301,7 +315,7 @@ export function RoomAssignmentUI({
           </div>
         )}
         {buildings.map((b) => {
-          const unassignedHere = b.rooms.filter((r) => !r.assignedTo).length;
+          const unassignedHere = b.units.filter((u) => !u.assignedTo).length;
           return (
             <section
               key={b.building}
@@ -312,7 +326,7 @@ export function RoomAssignmentUI({
                   {b.building}
                 </h3>
                 <div className="text-xs text-[var(--color-muted-foreground)]">
-                  {b.rooms.length} חדרים · {unassignedHere} פנויים
+                  {b.units.length} חדרים · {unassignedHere} פנויים
                   {unassignedHere > 0 && (
                     <button
                       type="button"
@@ -325,37 +339,49 @@ export function RoomAssignmentUI({
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {b.rooms.map((r) => {
-                  const isSelected = selected.has(r.id);
-                  const bg = r.assignedTo ? colorFor(r.assignedTo) : "white";
+                {b.units.map((u) => {
+                  const isSelected = selected.has(u.key);
+                  const linked = u.roomIds.length > 1;
+                  const bg = u.assignedTo ? colorFor(u.assignedTo) : "white";
                   return (
                     <button
-                      key={r.id}
+                      key={u.key}
                       type="button"
-                      onClick={() => toggleRoom(r.id)}
+                      onClick={() => toggleUnit(u.key)}
                       className={
                         "relative min-w-[72px] px-3 py-2 rounded-lg text-sm text-center transition-all border-2 " +
                         (isSelected
                           ? "border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/30"
-                          : r.assignedTo
+                          : u.assignedTo
                           ? "border-transparent"
                           : "border-[var(--color-border)] hover:border-[var(--color-accent)]")
                       }
                       style={{ background: bg }}
-                      title={r.assignedTo ? `משוייך: ${r.assignedTo}` : "פנוי"}
+                      title={
+                        (u.assignedTo ? `משוייך: ${u.assignedTo}` : "פנוי") +
+                        (linked ? " · חדר מחובר" : "")
+                      }
                     >
-                      <div className="font-mono font-semibold">{r.code}</div>
-                      {r.assignedTo && (
-                        <div className="text-[10px] mt-0.5 text-[var(--color-foreground)] truncate max-w-[64px]">
-                          {r.assignedTo}
+                      <div className="font-mono font-semibold flex items-center justify-center gap-1">
+                        {u.code}
+                        {linked && <span className="text-[9px] opacity-70">⛓</span>}
+                        {u.capacity != null && (
+                          <span className="text-[9px] font-normal opacity-70">
+                            · {u.capacity} מ׳
+                          </span>
+                        )}
+                      </div>
+                      {u.assignedTo && (
+                        <div className="text-[10px] mt-0.5 text-[var(--color-foreground)] truncate max-w-[80px]">
+                          {u.assignedTo}
                         </div>
                       )}
-                      {r.assignedTo && (
+                      {u.assignedTo && (
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm(`לבטל שיבוץ ${r.code} מ-${r.assignedTo}?`))
-                              doUnassign(r.id);
+                            if (confirm(`לבטל שיבוץ ${u.code} מ-${u.assignedTo}?`))
+                              doUnassignUnit(u);
                           }}
                           className="absolute top-0.5 right-1 text-[10px] text-red-700 hover:font-bold cursor-pointer"
                         >

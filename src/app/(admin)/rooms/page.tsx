@@ -3,8 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { formatNum } from "@/lib/utils";
 import { weekKeyOf, currentWeekKey, weekLabel } from "@/lib/weeks";
 import { parashaForWeek } from "@/lib/hebrew-calendar";
+import { getActiveYear } from "@/lib/year";
+import { loadRoomDemand, mergeRoomUnits, physicalCode } from "@/lib/rooms";
 import { RoomAssignmentUI } from "./assignment-ui";
 import { RoomsExportButton } from "./export-button";
+import { RoomDemandSummary } from "./demand-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +22,9 @@ export default async function RoomsPage({
   const raw = sp.week?.trim();
   const weekKey = raw ? weekKeyOf(new Date(raw)) : currentWeekKey();
 
-  const [rooms, yeshivot, allocations, allWeeks] = await Promise.all([
+  const activeYear = await getActiveYear();
+
+  const [rooms, yeshivot, allocations, allWeeks, demand] = await Promise.all([
     prisma.room.findMany({
       where: { active: true },
       orderBy: [{ building: "asc" }, { order: "asc" }],
@@ -36,6 +41,7 @@ export default async function RoomsPage({
       orderBy: { weekKey: "desc" },
       take: 8,
     }),
+    loadRoomDemand(activeYear),
   ]);
 
   // Group rooms by building for display.
@@ -52,6 +58,29 @@ export default async function RoomsPage({
   const countsByYeshiva = new Map<string, number>();
   for (const a of allocations) {
     countsByYeshiva.set(a.yeshiva, (countsByYeshiva.get(a.yeshiva) ?? 0) + 1);
+  }
+
+  // Allocated rooms + beds per yeshiva for the current week — linked rooms
+  // (א300_1/_2, א403_1/_2) count as one room; beds sum their capacity.
+  const roomById = new Map(rooms.map((r) => [r.id, r]));
+  const anyCapacity = rooms.some((r) => r.capacity != null);
+  const allocatedByYeshiva: Record<string, { rooms: number; beds: number }> = {};
+  const seenPhysical = new Map<string, Set<string>>(); // yeshiva -> physical codes
+  for (const a of allocations) {
+    const room = roomById.get(a.roomId);
+    if (!room) continue;
+    const acc = (allocatedByYeshiva[a.yeshiva] ??= { rooms: 0, beds: 0 });
+    let phys = seenPhysical.get(a.yeshiva);
+    if (!phys) {
+      phys = new Set();
+      seenPhysical.set(a.yeshiva, phys);
+    }
+    const pc = physicalCode(room.code);
+    if (!phys.has(pc)) {
+      phys.add(pc);
+      acc.rooms++;
+    }
+    acc.beds += room.capacity ?? 0;
   }
 
   const unassignedCount = rooms.length - allocations.length;
@@ -110,16 +139,26 @@ export default async function RoomsPage({
         </div>
       )}
 
+      <RoomDemandSummary
+        rows={demand.rows}
+        totals={demand.totals}
+        allocatedByYeshiva={allocatedByYeshiva}
+        anyCapacity={anyCapacity}
+      />
+
       <RoomAssignmentUI
         weekKey={weekKey}
         yeshivot={yeshivot.map((y) => y.name)}
         buildings={[...buildings.entries()].map(([building, rs]) => ({
           building,
-          rooms: rs.map((r) => ({
-            id: r.id,
-            code: r.code,
-            assignedTo: allocByRoom.get(r.id) ?? null,
-          })),
+          units: mergeRoomUnits(
+            rs.map((r) => ({
+              id: r.id,
+              code: r.code,
+              capacity: r.capacity,
+              assignedTo: allocByRoom.get(r.id) ?? null,
+            }))
+          ),
         }))}
         countsByYeshiva={Object.fromEntries(countsByYeshiva)}
       />
