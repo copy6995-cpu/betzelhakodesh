@@ -318,3 +318,32 @@ model RoomAllocation {
   @@index([weekKey, yeshiva])
   @@index([yeshiva])
 }
+
+/// Per-"year" config for the calendar page (/calendar). Keyed by the school-
+/// year label. The academic year runs by Hebrew date, so the office sets an
+/// arbitrary Gregorian start→end range (default 22 Av → 22 Av next year).
+/// `supervisorNames` is a JSON array of up to 9 header names.
+model CalendarConfig {
+  id              String   @id @default(cuid())
+  yearLabel       String   @unique
+  startDate       DateTime
+  endDate         DateTime
+  supervisorNames String   @default("[]")
+  updatedAt       DateTime @updatedAt
+}
+
+/// Editable cell values for one Shabbat row of the calendar. `weekKey` is the
+/// Shabbat's ISO date (YYYY-MM-DD). `values` is a JSON blob:
+///   { yeshivot: string[5], linaChul, linaAri, sup: {lina,kima}[9] }
+/// The auto columns (Hebrew date, parasha, special-Shabbat note) are computed
+/// from @hebcal, never stored.
+model CalendarWeek {
+  id        String   @id @default(cuid())
+  yearLabel String
+  weekKey   String
+  values    String   @default("{}")
+  updatedAt DateTime @updatedAt
+
+  @@unique([yearLabel, weekKey])
+  @@index([yearLabel])
+}

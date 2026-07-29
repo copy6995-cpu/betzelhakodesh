@@ -10,9 +10,10 @@ const NAV_LINKS = [
   { href: "/payments", label: "תשלומים", match: (p: string) => p.startsWith("/payments") },
   { href: "/nedarim/transactions", label: "נדרים פלוס", match: (p: string) => p.startsWith("/nedarim") },
   { href: "/yemot/beds", label: "מיטות", match: (p: string) => p.startsWith("/yemot/beds") },
-  { href: "/yemot/credit-cards", label: "סליקות", match: (p: string) => p.startsWith("/yemot/credit-cards") },
+  { href: "/yemot/credit-cards", label: "רישום שנתי ימות המשיח", match: (p: string) => p.startsWith("/yemot/credit-cards") },
   { href: "/rooms", label: "חדרים", match: (p: string) => p.startsWith("/rooms") },
   { href: "/registrations", label: "רישומים", match: (p: string) => p.startsWith("/registrations") },
+  { href: "/calendar", label: "לוח שנה", match: (p: string) => p.startsWith("/calendar") },
   { href: "/settings", label: "הגדרות", match: (p: string) => p.startsWith("/settings") },
 ];
 
