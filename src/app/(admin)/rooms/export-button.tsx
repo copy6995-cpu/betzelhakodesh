@@ -24,6 +24,13 @@ export function RoomsExportButton({
     setOpen(false);
   }
 
+  function openPdf() {
+    const params = new URLSearchParams({ week: weekKey });
+    if (label.trim()) params.set("label", label.trim());
+    window.open(`/rooms/print?${params.toString()}`, "_blank");
+    setOpen(false);
+  }
+
   return (
     <>
       <button
@@ -71,10 +78,17 @@ export function RoomsExportButton({
               </button>
               <button
                 type="button"
+                onClick={openPdf}
+                className="px-4 h-9 rounded-md border border-[var(--color-primary)] text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-muted)]"
+              >
+                🖨 PDF
+              </button>
+              <button
+                type="button"
                 onClick={download}
                 className="px-4 h-9 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)]"
               >
-                הורד
+                ↓ Excel
               </button>
             </div>
           </div>
