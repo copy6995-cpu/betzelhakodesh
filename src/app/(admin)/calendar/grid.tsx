@@ -6,10 +6,10 @@ import type { CalendarDayRow } from "@/lib/hebrew-calendar";
 import { saveCalendarConfig, saveCalendarWeek } from "./actions";
 
 const SUP_COUNT = 9;
-const YESHIVA_COUNT = 5;
 
 export type WeekValues = {
-  yeshivot: string[];
+  /** Editable cell per yeshiva, keyed by yeshiva name. */
+  yeshivot: Record<string, string>;
   linaChul: string;
   linaAri: string;
   sup: { lina: string; kima: string }[];
@@ -17,7 +17,7 @@ export type WeekValues = {
 
 function emptyValues(): WeekValues {
   return {
-    yeshivot: Array(YESHIVA_COUNT).fill(""),
+    yeshivot: {},
     linaChul: "",
     linaAri: "",
     sup: Array.from({ length: SUP_COUNT }, () => ({ lina: "", kima: "" })),
@@ -29,7 +29,9 @@ function normalize(v: Partial<WeekValues> | undefined): WeekValues {
   const base = emptyValues();
   if (!v) return base;
   return {
-    yeshivot: base.yeshivot.map((_, i) => v.yeshivot?.[i] ?? ""),
+    // Guard against legacy array-shaped data — start fresh if so.
+    yeshivot:
+      v.yeshivot && !Array.isArray(v.yeshivot) ? { ...v.yeshivot } : {},
     linaChul: v.linaChul ?? "",
     linaAri: v.linaAri ?? "",
     sup: base.sup.map((_, i) => ({
@@ -47,6 +49,7 @@ export function CalendarGrid({
   startISO,
   endISO,
   supervisorNames,
+  yeshivot,
   days,
   savedValues,
 }: {
@@ -54,6 +57,7 @@ export function CalendarGrid({
   startISO: string;
   endISO: string;
   supervisorNames: string[];
+  yeshivot: string[];
   days: CalendarDayRow[];
   savedValues: Record<string, Partial<WeekValues>>;
 }) {
@@ -166,9 +170,9 @@ export function CalendarGrid({
               <th rowSpan={2} className="sticky right-[316px] top-0 z-30 bg-[var(--color-muted)] w-[150px] min-w-[150px] py-2 px-2 border-e-2 border-[var(--color-border)]">
                 הערה
               </th>
-              {Array.from({ length: YESHIVA_COUNT }, (_, i) => (
-                <th key={i} rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 font-normal">
-                  ישיבה {i + 1}
+              {yeshivot.map((name) => (
+                <th key={name} rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 font-normal whitespace-nowrap">
+                  {name}
                 </th>
               ))}
               <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-s border-[var(--color-border)] font-normal">
@@ -238,11 +242,11 @@ export function CalendarGrid({
                   <td className={`sticky right-[316px] z-10 ${stickyBg} w-[150px] min-w-[150px] py-1 px-2 text-xs font-medium text-[var(--color-accent)] border-e-2 border-[var(--color-border)] whitespace-normal break-words leading-tight`}>
                     {d.note}
                   </td>
-                  {Array.from({ length: YESHIVA_COUNT }, (_, i) => (
-                    <td key={i} className="p-0 border-s border-[var(--color-border)]/30">
+                  {yeshivot.map((name) => (
+                    <td key={name} className="p-0 border-s border-[var(--color-border)]/30">
                       <input
-                        defaultValue={v.yeshivot[i]}
-                        onChange={(e) => (v.yeshivot[i] = e.target.value)}
+                        defaultValue={v.yeshivot[name] ?? ""}
+                        onChange={(e) => (v.yeshivot[name] = e.target.value)}
                         onBlur={save}
                         className={cellInput}
                       />

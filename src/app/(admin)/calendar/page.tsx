@@ -15,8 +15,27 @@ function isoOf(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
+// The two administrative buckets never get a calendar column.
+const EXCLUDED_YESHIVOT = new Set(["ארכיון", "שיעור א' - לא שובץ"]);
+// Fixed leaders, then the rest alphabetically (per the user).
+const YESHIVA_PRIORITY = ["ברכת אהרן", "ירושלים"];
+
 export default async function CalendarPage() {
   const yearLabel = await getActiveYear();
+
+  const yeshivaRows = await prisma.yeshiva.findMany({
+    where: { active: true },
+    select: { name: true },
+  });
+  const names = yeshivaRows
+    .map((y) => y.name)
+    .filter((n) => !EXCLUDED_YESHIVOT.has(n));
+  const yeshivot = [
+    ...YESHIVA_PRIORITY.filter((p) => names.includes(p)),
+    ...names
+      .filter((n) => !YESHIVA_PRIORITY.includes(n))
+      .sort((a, b) => a.localeCompare(b, "he")),
+  ];
 
   const config = await prisma.calendarConfig.findUnique({
     where: { yearLabel },
@@ -68,6 +87,7 @@ export default async function CalendarPage() {
         startISO={isoOf(range.start)}
         endISO={isoOf(range.end)}
         supervisorNames={supervisorNames}
+        yeshivot={yeshivot}
         days={days}
         savedValues={savedValues}
       />
