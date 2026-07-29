@@ -81,14 +81,14 @@ export function RoomsExportButton({
                 onClick={openPdf}
                 className="px-4 h-9 rounded-md border border-[var(--color-primary)] text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-muted)]"
               >
-                🖨 PDF
+                👁 תצוגה
               </button>
               <button
                 type="button"
                 onClick={download}
                 className="px-4 h-9 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)]"
               >
-                ↓ Excel
+                ↓ Excel + PDF
               </button>
             </div>
           </div>

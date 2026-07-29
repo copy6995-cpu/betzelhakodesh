@@ -450,13 +450,16 @@ export async function exportRoomsPerYeshiva(opts: {
 }
 
 /** Bundle every yeshiva's workbook into a single downloadable zip. Each file
- *  is named "{yeshiva} חדרים {label}" (label optional, e.g. the parasha). */
+ *  is named "{yeshiva} חדרים {label}" (label optional, e.g. the parasha). The
+ *  whole-building PDF report is added too (best-effort — skipped if no
+ *  headless browser is available). */
 export async function exportRoomsZip(opts: {
   weekKey: string;
   label?: string;
 }): Promise<{
   buffer: Buffer;
   fileCount: number;
+  hasPdf: boolean;
   warnings: string[];
 }> {
   const { files, warnings } = await exportRoomsPerYeshiva({
@@ -470,6 +473,24 @@ export async function exportRoomsZip(opts: {
     const safe = base.replace(/[<>:"/\\|?*\n\r\t]/g, "_").trim() || "ללא_שם";
     zip.file(`${safe}.xlsx`, buf);
   }
+
+  // Lazily import so the Excel-only path never pulls in puppeteer.
+  let hasPdf = false;
+  try {
+    const { renderRoomsPdf } = await import("./rooms-pdf");
+    const pdf = await renderRoomsPdf({ weekKey: opts.weekKey, label });
+    if (pdf) {
+      const base = `חלוקת חדרים${label ? ` ${label}` : ""}`;
+      const safe = base.replace(/[<>:"/\\|?*\n\r\t]/g, "_").trim() || "חדרים";
+      zip.file(`${safe}.pdf`, pdf);
+      hasPdf = true;
+    } else {
+      warnings.push("PDF לא נוצר (לא נמצא דפדפן Chrome/Edge להדפסה)");
+    }
+  } catch {
+    warnings.push("PDF לא נוצר (שגיאה ביצירת הקובץ)");
+  }
+
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
-  return { buffer, fileCount: files.size, warnings };
+  return { buffer, fileCount: files.size, hasPdf, warnings };
 }
