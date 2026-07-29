@@ -56,11 +56,19 @@ export default async function ParentsPage({
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">הורים</h1>
-        <p className="text-[var(--color-muted-foreground)] mt-1">
-          {formatNum(total)} הורים {q && `התואמים "${q}"`}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)]">הורים</h1>
+          <p className="text-[var(--color-muted-foreground)] mt-1">
+            {formatNum(total)} הורים {q && `התואמים "${q}"`}
+          </p>
+        </div>
+        <a
+          href="/api/parents/export"
+          className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors"
+        >
+          ↓ יצוא חייבים (יתרה מעל ₪1)
+        </a>
       </div>
 
       <div className="mb-6">
