@@ -3,7 +3,36 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { weekKeyOf, parseISODate } from "@/lib/weeks";
+import { importRoomCapacities } from "@/lib/rooms-capacity";
 import * as XLSX from "xlsx";
+
+/** Set (or clear) a room's bed count. */
+export async function setRoomCapacity(
+  roomId: string,
+  capacity: number | null
+): Promise<void> {
+  const cap =
+    capacity == null || Number.isNaN(capacity) || capacity < 0
+      ? null
+      : Math.floor(capacity);
+  await prisma.room.update({ where: { id: roomId }, data: { capacity: cap } });
+  revalidatePath("/rooms/manage");
+  revalidatePath("/rooms");
+}
+
+/** Bulk-import bed counts from the office model workbook (column C). */
+export async function importCapacitiesFromModel(): Promise<
+  { ok: true; updated: number; unmatched: number } | { ok: false; error: string }
+> {
+  try {
+    const r = await importRoomCapacities();
+    revalidatePath("/rooms/manage");
+    revalidatePath("/rooms");
+    return { ok: true, updated: r.updated, unmatched: r.unmatched.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
 
 /** Assign rooms to a yeshiva for a specific week. Existing allocations of
  *  those rooms (this week only) get replaced. */

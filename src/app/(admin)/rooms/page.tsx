@@ -104,6 +104,12 @@ export default async function RoomsPage({
             defaultLabel={parashaForWeek(new Date(`${weekKey}T00:00:00`))}
           />
           <Link
+            href="/rooms/manage"
+            className="px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm hover:bg-[var(--color-muted)] flex items-center"
+          >
+            🛏 מספר מיטות
+          </Link>
+          <Link
             href="/rooms/import"
             className="px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm hover:bg-[var(--color-muted)] flex items-center"
           >
