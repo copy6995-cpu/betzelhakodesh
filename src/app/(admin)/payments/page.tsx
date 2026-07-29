@@ -47,7 +47,15 @@ export default async function PaymentsPage({
             {formatNum(total)} תשלומים בשנת {year} · סה״כ {formatILS(totalAmt)}
           </p>
         </div>
-        <SyncPaymentsButton />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/payments/prior-years"
+            className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"
+          >
+            גביית שנים קודמות
+          </Link>
+          <SyncPaymentsButton />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl card-shadow">
