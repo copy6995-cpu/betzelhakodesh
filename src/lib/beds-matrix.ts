@@ -64,6 +64,7 @@ export async function loadBedsMatrix(opts: {
   filter: "" | "not-registered";
   from: Date | null;
   to: Date | null;
+  q?: string;
 }): Promise<BedsMatrix> {
   const { activeYear, scope, filter, from, to } = opts;
 
@@ -170,10 +171,16 @@ export async function loadBedsMatrix(opts: {
     }
   }
 
-  const filtered =
+  let filtered =
     filter === "not-registered"
       ? rows.filter((r) => r.approvedCount > 0 && r.registeredEshel === false)
       : rows;
+  const needle = (opts.q ?? "").trim();
+  if (needle) {
+    filtered = filtered.filter(
+      (r) => r.name.includes(needle) || r.code.includes(needle)
+    );
+  }
   filtered.sort((a, b) =>
     `${a.yeshiva}${a.name}`.localeCompare(`${b.yeshiva}${b.name}`, "he")
   );

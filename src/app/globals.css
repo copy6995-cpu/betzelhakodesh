@@ -99,7 +99,7 @@ body {
   box-shadow: 0 1px 2px rgba(15, 41, 66, 0.04), 0 4px 12px rgba(15, 41, 66, 0.06);
 }
 
-/* Table row hover */
-tbody tr:hover {
+/* Table row hover (opt out with .no-hover, e.g. summary/total rows) */
+tbody tr:not(.no-hover):hover {
   background-color: rgba(236, 234, 228, 0.5);
 }

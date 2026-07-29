@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
 import { loadBedsMatrix, shortDate } from "@/lib/beds-matrix";
+import { SearchBox } from "@/components/search-box";
 import { SyncBedsButton } from "./sync-beds";
 import { BedsExportButton } from "./export-button";
 
@@ -14,6 +15,7 @@ type SearchParams = {
   to?: string; // YYYY-MM-DD
   scope?: string; // "year" | "all"  — default "year" hides reservations
   // whose personalCode isn't in the current-year roster
+  q?: string; // free-text: student name / personal code
 };
 
 /** Parse a "YYYY-MM-DD" query param into a Date at local midnight. */
@@ -49,6 +51,7 @@ export default async function BedsPage({
     filter: filter === "not-registered" ? "not-registered" : "",
     from: fromDate,
     to: toDate,
+    q: sp.q,
   });
 
   return (
@@ -203,6 +206,10 @@ export default async function BedsPage({
         </Link>
       </div>
 
+      <div className="mb-6">
+        <SearchBox placeholder="חיפוש לפי שם או קוד אישי..." />
+      </div>
+
       {weeks.length === 0 ? (
         <div className="bg-white rounded-xl card-shadow p-8 text-center">
           <p className="text-[var(--color-muted-foreground)]">
@@ -217,29 +224,31 @@ export default async function BedsPage({
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl card-shadow overflow-x-auto">
-          <table className="text-sm border-collapse">
+        <div className="bg-white rounded-xl card-shadow overflow-auto max-h-[calc(100vh-15rem)]">
+          {/* border-separate (not collapse) so the sticky header <th>s stay
+              pinned on scroll — collapse breaks position:sticky in Chromium. */}
+          <table className="text-sm border-separate border-spacing-0">
             <thead>
               <tr className="bg-[var(--color-muted)]">
-                <th className="sticky right-0 z-20 bg-[var(--color-muted)] py-2 pe-3 ps-3 text-right border-e border-[var(--color-border)] whitespace-nowrap">
+                <th className="sticky right-0 top-0 z-30 bg-[var(--color-muted)] py-2 pe-3 ps-3 text-right border-e border-b border-[var(--color-border)] whitespace-nowrap">
                   ישיבה
                 </th>
-                <th className="sticky right-[80px] z-20 bg-[var(--color-muted)] py-2 pe-3 ps-3 text-right border-e border-[var(--color-border)] whitespace-nowrap">
+                <th className="sticky right-[80px] top-0 z-30 bg-[var(--color-muted)] py-2 pe-3 ps-3 text-right border-e border-b border-[var(--color-border)] whitespace-nowrap">
                   שם
                 </th>
-                <th className="py-2 px-2 text-center text-xs whitespace-nowrap">
+                <th className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 text-center text-xs border-b border-[var(--color-border)] whitespace-nowrap">
                   קוד
                 </th>
-                <th className="py-2 px-2 text-center text-xs whitespace-nowrap">
+                <th className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 text-center text-xs border-b border-[var(--color-border)] whitespace-nowrap">
                   שיעור
                 </th>
-                <th className="py-2 px-2 text-center text-xs whitespace-nowrap">
+                <th className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 text-center text-xs border-b border-[var(--color-border)] whitespace-nowrap">
                   אש״ל
                 </th>
                 {weeks.map((w) => (
                   <th
                     key={w.weekKey}
-                    className="py-2 px-1 text-center text-xs font-normal min-w-[60px] whitespace-nowrap"
+                    className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-1 text-center text-xs font-normal min-w-[60px] border-b border-[var(--color-border)] whitespace-nowrap"
                   >
                     <div className="text-[10px] text-[var(--color-muted-foreground)]">
                       {w.hebDate ?? w.weekKey}
@@ -249,7 +258,7 @@ export default async function BedsPage({
                     </div>
                   </th>
                 ))}
-                <th className="py-2 px-2 text-center text-xs whitespace-nowrap bg-[var(--color-accent)]/10">
+                <th className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 text-center text-xs border-b border-[var(--color-border)] whitespace-nowrap">
                   סה״כ
                 </th>
               </tr>
@@ -266,7 +275,7 @@ export default async function BedsPage({
                 return (
                   <tr
                     key={row.code}
-                    className="border-t border-[var(--color-border)]/40"
+                    className="[&>td]:border-t [&>td]:border-[var(--color-border)]/40"
                   >
                     <td className="sticky right-0 z-10 bg-white py-1.5 pe-3 ps-3 text-xs text-[var(--color-muted-foreground)] border-e border-[var(--color-border)] whitespace-nowrap">
                       {row.yeshiva}
@@ -329,7 +338,7 @@ export default async function BedsPage({
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-[var(--color-primary)] bg-[var(--color-primary)] text-white">
+              <tr className="no-hover bg-[var(--color-primary)] text-white [&>td]:border-t-2 [&>td]:border-[var(--color-primary)]">
                 <td className="sticky right-0 z-10 bg-[var(--color-primary)] py-2 pe-3 ps-3 text-xs">
                   סיכום
                 </td>
