@@ -16,7 +16,7 @@ import { prisma } from "./prisma";
 /** The standard end-of-registration seasons every year is seeded with. Real
  *  data may carry others (e.g. "תשרי") — the settings editor unions these
  *  with whatever labels students actually have. */
-export const END_DATE_SEASONS = ["סוכות", "חנוכה", "פסח", "סוף שנה"];
+export const END_DATE_SEASONS = ["חנוכה", "פסח", "סוף שנה"];
 
 /** Chronological order within a school year (Tishrei → Elul), used to sort
  *  season labels for display. Unknown labels sort to the end. */
