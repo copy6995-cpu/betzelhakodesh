@@ -18,7 +18,8 @@ export async function saveYemotToken(token: string): Promise<void> {
 export async function addYemotSource(
   path: string,
   current: boolean,
-  label: string
+  label: string,
+  kind: "booking" | "cancellation" = "booking"
 ): Promise<void> {
   const p = path.trim();
   if (!p) throw new Error("נתיב חסר");
@@ -28,10 +29,24 @@ export async function addYemotSource(
       path: p,
       current,
       label: label.trim() || null,
+      kind: kind === "cancellation" ? "cancellation" : "booking",
       order: (max._max.order ?? 0) + 1,
     },
   });
   revalidatePath("/settings/yemot");
+  revalidatePath("/yemot/beds");
+}
+
+/** Flip a source between a bookings feed and a cancellations feed. */
+export async function toggleYemotSourceKind(id: string): Promise<void> {
+  const src = await prisma.yemotSource.findUnique({ where: { id } });
+  if (!src) return;
+  await prisma.yemotSource.update({
+    where: { id },
+    data: { kind: src.kind === "cancellation" ? "booking" : "cancellation" },
+  });
+  revalidatePath("/settings/yemot");
+  revalidatePath("/yemot/beds");
 }
 
 export async function removeYemotSource(id: string): Promise<void> {

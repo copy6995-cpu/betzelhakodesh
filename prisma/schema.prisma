@@ -278,6 +278,10 @@ model YemotSource {
   current Boolean @default(true)
   order   Int     @default(0)
   label   String?
+  // "booking" (default) or "cancellation" — a cancellation source (שלוחה 5
+  // from the main menu) lists students who cancelled; a matching
+  // personalCode+weekKey voids that week's booking everywhere in reports.
+  kind    String  @default("booking")
 }
 
 /// A single physical room in the building. Grouped by `building` (which

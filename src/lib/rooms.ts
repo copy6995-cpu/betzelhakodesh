@@ -4,6 +4,7 @@
  */
 import { prisma } from "./prisma";
 import { orderCalendarYeshivot } from "./calendar-export";
+import { loadCancellations, isLiveBooking } from "./bed-cancellations";
 
 /**
  * Some physical rooms are two catalog entries that must be assigned together
@@ -73,7 +74,7 @@ export async function loadRoomDemand(activeYear: string): Promise<{
   rows: YeshivaDemand[];
   totals: { ari: number; chul: number; oneTime: number; total: number };
 }> {
-  const [students, bookerRows] = await Promise.all([
+  const [students, bookerRows, cancellations] = await Promise.all([
     prisma.student.findMany({
       where: { year: activeYear, archived: false },
       select: {
@@ -85,12 +86,17 @@ export async function loadRoomDemand(activeYear: string): Promise<{
     }),
     prisma.yemotBedReservation.findMany({
       where: { status: "מאושר" },
-      select: { personalCode: true },
-      distinct: ["personalCode"],
+      select: { personalCode: true, weekKey: true, source: true },
     }),
+    loadCancellations(),
   ]);
 
-  const bookers = new Set(bookerRows.map((r) => r.personalCode));
+  // Distinct students with at least one live (non-cancelled) booking.
+  const bookers = new Set(
+    bookerRows
+      .filter((r) => isLiveBooking(r, cancellations))
+      .map((r) => r.personalCode)
+  );
 
   const map = new Map<string, YeshivaDemand>();
   const ensure = (y: string) => {

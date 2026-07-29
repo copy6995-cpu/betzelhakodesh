@@ -66,6 +66,7 @@ export default async function YemotSettingsPage() {
           path: x.path,
           current: x.current,
           label: x.label ?? "",
+          kind: x.kind === "cancellation" ? "cancellation" : "booking",
         }))}
         reservationCount={s.reservationCount}
         weeksCount={s.weeksCount}

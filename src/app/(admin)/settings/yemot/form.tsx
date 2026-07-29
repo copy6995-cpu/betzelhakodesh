@@ -7,16 +7,20 @@ import {
   addYemotSource,
   removeYemotSource,
   toggleYemotSourceCurrent,
+  toggleYemotSourceKind,
   syncYemotFull,
   syncYemotLatest,
   syncYemotCreditCards,
 } from "./actions";
+
+type SourceKind = "booking" | "cancellation";
 
 type SourceRow = {
   id: string;
   path: string;
   current: boolean;
   label: string;
+  kind: SourceKind;
 };
 
 type DefaultSource = { path: string; label: string; current: boolean };
@@ -257,6 +261,7 @@ function AddSourceRow({ defaultSources }: { defaultSources: DefaultSource[] }) {
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
   const [current, setCurrent] = useState(true);
+  const [kind, setKind] = useState<SourceKind>("booking");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -265,9 +270,10 @@ function AddSourceRow({ defaultSources }: { defaultSources: DefaultSource[] }) {
     setError(null);
     startTransition(async () => {
       try {
-        await addYemotSource(path, current, label);
+        await addYemotSource(path, current, label, kind);
         setPath("");
         setLabel("");
+        setKind("booking");
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "שגיאה");
@@ -300,6 +306,19 @@ function AddSourceRow({ defaultSources }: { defaultSources: DefaultSource[] }) {
             placeholder="למשל: דוחות 1"
             className="mt-1 w-full h-10 rounded-lg border border-[var(--color-border)] px-3 text-sm"
           />
+        </label>
+        <label className="block min-w-[130px]">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+            סוג
+          </span>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as SourceKind)}
+            className="mt-1 w-full h-10 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm"
+          >
+            <option value="booking">הזמנות</option>
+            <option value="cancellation">ביטולים (שלוחה 5)</option>
+          </select>
         </label>
         <label className="flex items-center gap-2 h-10 px-3 rounded-lg border border-[var(--color-border)]">
           <input
@@ -345,10 +364,18 @@ function AddSourceRow({ defaultSources }: { defaultSources: DefaultSource[] }) {
 function SourceRowView({ source }: { source: SourceRow }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const isCancel = source.kind === "cancellation";
 
   function toggle() {
     startTransition(async () => {
       await toggleYemotSourceCurrent(source.id);
+      router.refresh();
+    });
+  }
+
+  function toggleKind() {
+    startTransition(async () => {
+      await toggleYemotSourceKind(source.id);
       router.refresh();
     });
   }
@@ -367,15 +394,36 @@ function SourceRowView({ source }: { source: SourceRow }) {
   }
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] p-3 flex items-center gap-3 flex-wrap">
+    <div
+      className={
+        "rounded-lg border p-3 flex items-center gap-3 flex-wrap " +
+        (isCancel
+          ? "border-red-300 bg-red-50/40"
+          : "border-[var(--color-border)]")
+      }
+    >
       <div className="flex-1 min-w-[200px]">
-        <div className="font-semibold text-[var(--color-primary)]">
+        <div className="font-semibold text-[var(--color-primary)] flex items-center gap-2">
           {source.label || source.path}
+          {isCancel && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+              ביטולים
+            </span>
+          )}
         </div>
         <div className="text-xs text-[var(--color-muted-foreground)] font-mono" dir="ltr">
           {source.path}
         </div>
       </div>
+      <button
+        type="button"
+        onClick={toggleKind}
+        disabled={pending}
+        className="px-3 h-8 rounded-md border border-[var(--color-border)] text-xs hover:bg-[var(--color-muted)]"
+        title="החלף בין הזמנות לביטולים"
+      >
+        {isCancel ? "↩ הפוך להזמנות" : "סמן כביטולים"}
+      </button>
       <button
         type="button"
         onClick={toggle}

@@ -10,6 +10,7 @@
  */
 import { prisma } from "./prisma";
 import { dateKey } from "./beds-matrix";
+import { loadCancellations, isLiveBooking } from "./bed-cancellations";
 
 export type BedGroupRow = {
   group: string;
@@ -46,10 +47,16 @@ function rawGroup(raw: string): string {
 export async function loadBedGroupReport(
   activeYear: string
 ): Promise<BedGroupReport> {
-  const [reservations, students, charges] = await Promise.all([
+  const [reservationsRaw, students, charges, cancellations] = await Promise.all([
     prisma.yemotBedReservation.findMany({
       where: { status: "מאושר" },
-      select: { personalCode: true, date: true, raw: true },
+      select: {
+        personalCode: true,
+        weekKey: true,
+        source: true,
+        date: true,
+        raw: true,
+      },
     }),
     prisma.student.findMany({
       where: { year: activeYear, archived: false },
@@ -59,7 +66,13 @@ export async function loadBedGroupReport(
       where: { status: "מאושר" },
       select: { personalCode: true, amount: true },
     }),
+    loadCancellations(),
   ]);
+
+  // Drop cancellation rows + weeks a cancellation voided.
+  const reservations = reservationsRaw.filter((r) =>
+    isLiveBooking(r, cancellations)
+  );
 
   const eshelByCode = new Map(
     students.map((s) => [s.personalCode, s.registeredEshel])

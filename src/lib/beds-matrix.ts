@@ -4,6 +4,7 @@
  * from the same filters (year scope, date range, "booked but not registered").
  */
 import { prisma } from "./prisma";
+import { loadCancellations, isLiveBooking } from "./bed-cancellations";
 
 export type BedCell = {
   status: "approved" | "outofstock" | null;
@@ -69,7 +70,7 @@ export async function loadBedsMatrix(opts: {
 }): Promise<BedsMatrix> {
   const { activeYear, scope, filter, from, to } = opts;
 
-  const [reservationsRaw, students] = await Promise.all([
+  const [reservationsRaw, students, cancellations] = await Promise.all([
     prisma.yemotBedReservation.findMany({
       orderBy: [{ weekKey: "asc" }, { personalCode: "asc" }],
     }),
@@ -85,10 +86,13 @@ export async function loadBedsMatrix(opts: {
         registeredEshel: true,
       },
     }),
+    loadCancellations(),
   ]);
 
   const yearCodes = new Set(students.map((s) => s.personalCode));
   const reservations = reservationsRaw.filter((r) => {
+    // Cancellation rows aren't bookings; a cancelled week is voided.
+    if (!isLiveBooking(r, cancellations)) return false;
     if (scope === "year" && !yearCodes.has(r.personalCode)) return false;
     if (from || to) {
       const d = parseDmyLocal(r.date);
