@@ -1,9 +1,14 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
 import {
   buildCalendarDays,
   defaultRangeForYear,
 } from "@/lib/hebrew-calendar";
+import {
+  orderCalendarYeshivot,
+  computeCalendarCounts,
+} from "@/lib/calendar-export";
 import { CalendarGrid, type WeekValues } from "./grid";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +20,6 @@ function isoOf(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
-// The two administrative buckets never get a calendar column.
-const EXCLUDED_YESHIVOT = new Set(["ארכיון", "שיעור א' - לא שובץ"]);
-// Fixed leaders, then the rest alphabetically (per the user).
-const YESHIVA_PRIORITY = ["ברכת אהרן", "ירושלים"];
-
 export default async function CalendarPage() {
   const yearLabel = await getActiveYear();
 
@@ -27,15 +27,7 @@ export default async function CalendarPage() {
     where: { active: true },
     select: { name: true },
   });
-  const names = yeshivaRows
-    .map((y) => y.name)
-    .filter((n) => !EXCLUDED_YESHIVOT.has(n));
-  const yeshivot = [
-    ...YESHIVA_PRIORITY.filter((p) => names.includes(p)),
-    ...names
-      .filter((n) => !YESHIVA_PRIORITY.includes(n))
-      .sort((a, b) => a.localeCompare(b, "he")),
-  ];
+  const yeshivot = orderCalendarYeshivot(yeshivaRows.map((y) => y.name));
 
   const config = await prisma.calendarConfig.findUnique({
     where: { yearLabel },
@@ -70,16 +62,30 @@ export default async function CalendarPage() {
     }
   }
 
+  const counts = computeCalendarCounts(
+    days.map((d) => d.dayKey),
+    savedValues,
+    yeshivot
+  );
+
   return (
     <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8" dir="rtl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">
-          לוח שנה
-        </h1>
-        <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
-          {days.length} ימים · {yearLabel}. תאריך עברי, יום, פרשה וחגים
-          מחושבים אוטומטית. שאר העמודות נשמרות עם היציאה מהתא.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)]">
+            לוח שנה
+          </h1>
+          <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
+            {days.length} ימים · {yearLabel}. תאריך עברי, יום, פרשה וחגים
+            מחושבים אוטומטית. שאר העמודות נשמרות עם היציאה מהתא.
+          </p>
+        </div>
+        <Link
+          href={`/api/calendar/export?year=${encodeURIComponent(yearLabel)}`}
+          className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"
+        >
+          ↓ יצוא לאקסל
+        </Link>
       </div>
 
       <CalendarGrid
@@ -90,6 +96,7 @@ export default async function CalendarPage() {
         yeshivot={yeshivot}
         days={days}
         savedValues={savedValues}
+        counts={counts}
       />
     </div>
   );

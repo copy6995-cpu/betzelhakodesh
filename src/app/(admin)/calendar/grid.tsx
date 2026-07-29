@@ -3,6 +3,7 @@
 import { Fragment, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarDayRow } from "@/lib/hebrew-calendar";
+import type { CalendarCounts } from "@/lib/calendar-export";
 import { saveCalendarConfig, saveCalendarWeek } from "./actions";
 
 const SUP_COUNT = 9;
@@ -52,6 +53,7 @@ export function CalendarGrid({
   yeshivot,
   days,
   savedValues,
+  counts,
 }: {
   yearLabel: string;
   startISO: string;
@@ -60,6 +62,7 @@ export function CalendarGrid({
   yeshivot: string[];
   days: CalendarDayRow[];
   savedValues: Record<string, Partial<WeekValues>>;
+  counts: CalendarCounts;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -292,6 +295,40 @@ export function CalendarGrid({
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="bg-[var(--color-primary)] text-white font-semibold text-xs">
+              <td className="sticky right-0 bottom-0 z-30 bg-[var(--color-primary)] w-[84px] py-1.5 px-2 border-t-2 border-[var(--color-primary)]">
+                סיכום
+              </td>
+              <td className="sticky right-[84px] bottom-0 z-30 bg-[var(--color-primary)] w-[52px] py-1.5 border-t-2 border-[var(--color-primary)]" />
+              <td className="sticky right-[136px] bottom-0 z-30 bg-[var(--color-primary)] w-[100px] py-1.5 border-t-2 border-[var(--color-primary)]" />
+              <td className="sticky right-[236px] bottom-0 z-30 bg-[var(--color-primary)] w-[80px] py-1.5 border-t-2 border-[var(--color-primary)]" />
+              <td className="sticky right-[316px] bottom-0 z-30 bg-[var(--color-primary)] w-[150px] py-1.5 px-2 border-t-2 border-e-2 border-[var(--color-primary)] whitespace-nowrap">
+                ימים מלאים
+              </td>
+              {yeshivot.map((name) => (
+                <td key={name} className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
+                  {counts.yeshivot[name] || ""}
+                </td>
+              ))}
+              <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
+                {counts.linaChul || ""}
+              </td>
+              <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
+                {counts.linaAri || ""}
+              </td>
+              {Array.from({ length: SUP_COUNT }, (_, i) => (
+                <Fragment key={i}>
+                  <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-1 text-center border-t-2 border-[var(--color-primary)]">
+                    {counts.sup[i]?.lina || ""}
+                  </td>
+                  <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-1 text-center border-t-2 border-[var(--color-primary)]">
+                    {counts.sup[i]?.kima || ""}
+                  </td>
+                </Fragment>
+              ))}
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
