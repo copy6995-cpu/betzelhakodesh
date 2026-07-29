@@ -112,9 +112,9 @@ export async function buildCalendarWorkbook(yearLabel: string): Promise<Buffer> 
     "תאריך עברי",
     "פרשה",
     "הערה",
-    ...yeshivot,
     "לינה חול",
     "לינה ארי",
+    ...yeshivot,
     ...supHeaders,
   ];
   ws.addRow(header).font = { bold: true };

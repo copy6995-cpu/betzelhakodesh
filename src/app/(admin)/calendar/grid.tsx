@@ -45,6 +45,38 @@ function normalize(v: Partial<WeekValues> | undefined): WeekValues {
 const cellInput =
   "w-full min-w-[64px] px-1.5 h-8 text-xs border-0 bg-transparent focus:bg-white focus:ring-1 focus:ring-[var(--color-accent)]/50 rounded";
 
+const cellSelect =
+  "w-full min-w-[64px] px-1 h-8 text-xs text-center border-0 bg-transparent focus:bg-white focus:ring-1 focus:ring-[var(--color-accent)]/50 rounded cursor-pointer";
+
+const filledCell = (s: string | undefined) => !!(s ?? "").trim();
+
+/** Recompute the "days filled" totals from the live values (client-side, so
+ *  the summary row updates the moment a cell changes — no page reload). */
+function computeCountsClient(
+  values: Record<string, WeekValues>,
+  dayKeys: string[],
+  yeshivot: string[]
+): CalendarCounts {
+  const c: CalendarCounts = {
+    yeshivot: Object.fromEntries(yeshivot.map((y) => [y, 0])),
+    linaChul: 0,
+    linaAri: 0,
+    sup: Array.from({ length: SUP_COUNT }, () => ({ lina: 0, kima: 0 })),
+  };
+  for (const k of dayKeys) {
+    const v = values[k];
+    if (!v) continue;
+    for (const y of yeshivot) if (filledCell(v.yeshivot?.[y])) c.yeshivot[y]++;
+    if (filledCell(v.linaChul)) c.linaChul++;
+    if (filledCell(v.linaAri)) c.linaAri++;
+    for (let i = 0; i < SUP_COUNT; i++) {
+      if (filledCell(v.sup?.[i]?.lina)) c.sup[i].lina++;
+      if (filledCell(v.sup?.[i]?.kima)) c.sup[i].kima++;
+    }
+  }
+  return c;
+}
+
 export function CalendarGrid({
   yearLabel,
   startISO,
@@ -67,6 +99,9 @@ export function CalendarGrid({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<string>("");
+  // Live "days filled" totals — recomputed on every cell change so the
+  // summary row updates immediately (server `counts` is only the initial).
+  const [liveCounts, setLiveCounts] = useState<CalendarCounts>(counts);
 
   // Mutable stores — typing updates refs (no re-render); blur persists.
   const valuesRef = useRef<Record<string, WeekValues>>(
@@ -74,6 +109,11 @@ export function CalendarGrid({
       days.map((d) => [d.dayKey, normalize(savedValues[d.dayKey])])
     )
   );
+
+  const dayKeys = days.map((d) => d.dayKey);
+  function refreshCounts() {
+    setLiveCounts(computeCountsClient(valuesRef.current, dayKeys, yeshivot));
+  }
   const rangeRef = useRef({ start: startISO, end: endISO });
   const namesRef = useRef<string[]>(
     Array.from({ length: SUP_COUNT }, (_, i) => supervisorNames[i] ?? "")
@@ -85,6 +125,7 @@ export function CalendarGrid({
   }
 
   function saveWeek(weekKey: string) {
+    refreshCounts();
     startTransition(async () => {
       try {
         await saveCalendarWeek(yearLabel, weekKey, valuesRef.current[weekKey]);
@@ -173,22 +214,22 @@ export function CalendarGrid({
               <th rowSpan={2} className="sticky right-[316px] top-0 z-30 bg-[var(--color-muted)] w-[150px] min-w-[150px] py-2 px-2 border-e-2 border-[var(--color-border)]">
                 הערה
               </th>
-              {yeshivot.map((name) => (
-                <th key={name} rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 font-normal whitespace-nowrap">
-                  {name}
-                </th>
-              ))}
-              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-s border-[var(--color-border)] font-normal">
+              <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 font-normal">
                 לינה חו״ל
               </th>
               <th rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 border-e-2 border-[var(--color-border)] font-normal">
                 לינה אר״י
               </th>
+              {yeshivot.map((name) => (
+                <th key={name} rowSpan={2} className="sticky top-0 z-20 bg-[var(--color-muted)] py-2 px-2 font-normal whitespace-nowrap">
+                  {name}
+                </th>
+              ))}
               {Array.from({ length: SUP_COUNT }, (_, i) => (
                 <th
                   key={i}
                   colSpan={2}
-                  className="sticky top-0 z-20 bg-[var(--color-muted)] h-9 py-1 px-1 border-s border-[var(--color-border)] text-center"
+                  className="sticky top-0 z-20 bg-[var(--color-muted)] h-9 py-1 px-1 border-s-2 border-[var(--color-border)] text-center"
                 >
                   <input
                     defaultValue={supervisorNames[i] ?? ""}
@@ -245,35 +286,55 @@ export function CalendarGrid({
                   <td className={`sticky right-[316px] z-10 ${stickyBg} w-[150px] min-w-[150px] py-1 px-2 text-xs font-medium text-[var(--color-accent)] border-e-2 border-[var(--color-border)] whitespace-normal break-words leading-tight`}>
                     {d.note}
                   </td>
-                  {yeshivot.map((name) => (
-                    <td key={name} className="p-0 border-s border-[var(--color-border)]/30">
-                      <input
-                        defaultValue={v.yeshivot[name] ?? ""}
-                        onChange={(e) => (v.yeshivot[name] = e.target.value)}
-                        onBlur={save}
-                        className={cellInput}
-                      />
-                    </td>
-                  ))}
-                  <td className="p-0 border-s border-[var(--color-border)]">
-                    <input
+                  <td className="p-0">
+                    <select
                       defaultValue={v.linaChul}
-                      onChange={(e) => (v.linaChul = e.target.value)}
-                      onBlur={save}
-                      className={cellInput}
-                    />
+                      onChange={(e) => {
+                        v.linaChul = e.target.value;
+                        save();
+                      }}
+                      className={cellSelect}
+                    >
+                      <option value=""></option>
+                      <option value="כן">כן</option>
+                    </select>
                   </td>
                   <td className="p-0 border-e-2 border-[var(--color-border)]">
-                    <input
+                    <select
                       defaultValue={v.linaAri}
-                      onChange={(e) => (v.linaAri = e.target.value)}
-                      onBlur={save}
-                      className={cellInput}
-                    />
+                      onChange={(e) => {
+                        v.linaAri = e.target.value;
+                        save();
+                      }}
+                      className={cellSelect}
+                    >
+                      <option value=""></option>
+                      <option value="כן">כן</option>
+                    </select>
                   </td>
+                  {yeshivot.map((name) => (
+                    <td key={name} className="p-0 border-s border-[var(--color-border)]/30">
+                      <select
+                        defaultValue={v.yeshivot[name] ?? ""}
+                        onChange={(e) => {
+                          v.yeshivot[name] = e.target.value;
+                          save();
+                        }}
+                        className={cellSelect}
+                      >
+                        <option value=""></option>
+                        <option value="כן">כן</option>
+                      </select>
+                    </td>
+                  ))}
                   {Array.from({ length: SUP_COUNT }, (_, i) => (
                     <Fragment key={i}>
-                      <td className="p-0 border-s border-[var(--color-border)]">
+                      <td
+                        className={
+                          "p-0 border-[var(--color-border)] " +
+                          (i === 0 ? "border-s-2" : "border-s")
+                        }
+                      >
                         <input
                           defaultValue={v.sup[i].lina}
                           onChange={(e) => (v.sup[i].lina = e.target.value)}
@@ -306,24 +367,24 @@ export function CalendarGrid({
               <td className="sticky right-[316px] bottom-0 z-30 bg-[var(--color-primary)] w-[150px] py-1.5 px-2 border-t-2 border-e-2 border-[var(--color-primary)] whitespace-nowrap">
                 ימים מלאים
               </td>
+              <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
+                {liveCounts.linaChul || ""}
+              </td>
+              <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-e-2 border-[var(--color-primary)]">
+                {liveCounts.linaAri || ""}
+              </td>
               {yeshivot.map((name) => (
                 <td key={name} className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
-                  {counts.yeshivot[name] || ""}
+                  {liveCounts.yeshivot[name] || ""}
                 </td>
               ))}
-              <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
-                {counts.linaChul || ""}
-              </td>
-              <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-2 text-center border-t-2 border-[var(--color-primary)]">
-                {counts.linaAri || ""}
-              </td>
               {Array.from({ length: SUP_COUNT }, (_, i) => (
                 <Fragment key={i}>
-                  <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-1 text-center border-t-2 border-[var(--color-primary)]">
-                    {counts.sup[i]?.lina || ""}
+                  <td className={"sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-1 text-center border-t-2 border-[var(--color-primary)] " + (i === 0 ? "border-s-2" : "")}>
+                    {liveCounts.sup[i]?.lina || ""}
                   </td>
                   <td className="sticky bottom-0 z-20 bg-[var(--color-primary)] py-1.5 px-1 text-center border-t-2 border-[var(--color-primary)]">
-                    {counts.sup[i]?.kima || ""}
+                    {liveCounts.sup[i]?.kima || ""}
                   </td>
                 </Fragment>
               ))}
