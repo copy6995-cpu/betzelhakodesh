@@ -59,7 +59,20 @@ const YEAR_FIELD = "Snif1";
 const PRICE_FIELD = "TashlumAmount";
 const PAYMENTS_FIELD = "Tashlumim";
 const END_DATE_FIELD = "Time_1";
+/** Ari/Chul (Israel vs abroad). Nedarim stores it in `TypeCuty` as
+ *  "אר״י" / "חו״ל" (with gershayim); the app's select uses the bare
+ *  "ארי" / "חול". Verified against 400 submissions. */
+const ARICHUL_FIELD = "TypeCuty";
 const PAYMENT_METHOD_HOOK = "נדרים פלוס";
+
+/** Normalize TypeCuty → the app's canonical "ארי" / "חול" (strip quote
+ *  marks). Returns null for anything else so we never copy garbage. */
+function normalizeAriChul(raw: unknown): string | null {
+  const v = String(raw ?? "")
+    .replace(/["'׳״]/g, "")
+    .trim();
+  return v === "ארי" || v === "חול" ? v : null;
+}
 
 /** Parse an integer, returning null on any garbage input. */
 function toInt(v: unknown): number | null {
@@ -100,6 +113,7 @@ export async function attachFormsToStudents(
     price: number | null;
     paymentsCount: number | null;
     endDateLabel: string | null;
+    ariChul: string | null;
   };
   const planByYearCode = new Map<string, Plan>();
   const perYearScanned = new Map<string, number>();
@@ -159,6 +173,7 @@ export async function attachFormsToStudents(
       paymentsCount: toInt(obj[PAYMENTS_FIELD]),
       endDateLabel:
         String(obj[END_DATE_FIELD] ?? "").trim() || null,
+      ariChul: normalizeAriChul(obj[ARICHUL_FIELD]),
     });
   }
 
@@ -226,6 +241,7 @@ export async function attachFormsToStudents(
       paymentMethod: true,
       paymentsCount: true,
       endDateLabel: true,
+      ariChul: true,
     },
   });
   const byYearCode = new Map<string, (typeof candidates)[number]>();
@@ -254,6 +270,7 @@ export async function attachFormsToStudents(
       paymentMethod?: string;
       paymentsCount?: number;
       endDateLabel?: string;
+      ariChul?: string;
     } = {};
     if (plan.hook) {
       if (!student.nedarimHook) {
@@ -282,6 +299,12 @@ export async function attachFormsToStudents(
     }
     if (plan.endDateLabel && plan.endDateLabel !== student.endDateLabel) {
       updates.endDateLabel = plan.endDateLabel;
+    }
+    // Ari/Chul from the form (normalized). Overwrite when the form has a
+    // clean value — it's the parent's own declaration and also repairs the
+    // inconsistently-quoted legacy values ("אר״י" → "ארי").
+    if (plan.ariChul && plan.ariChul !== student.ariChul) {
+      updates.ariChul = plan.ariChul;
     }
     if (student.paymentMethod !== PAYMENT_METHOD_HOOK) {
       updates.paymentMethod = PAYMENT_METHOD_HOOK;
