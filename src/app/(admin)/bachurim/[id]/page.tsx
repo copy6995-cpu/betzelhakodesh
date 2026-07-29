@@ -5,6 +5,7 @@ import { formatILS, formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
 import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
 import { DeleteStudentButton } from "./delete-button";
+import { DeletePaymentButton } from "./delete-payment-button";
 import { PromoteStudentButton } from "./promote-button";
 
 export const dynamic = "force-dynamic";
@@ -227,30 +228,52 @@ export default async function BachurDetailPage({
                     <th className="py-2 px-4 font-semibold">אמצעי</th>
                     <th className="py-2 px-4 font-semibold">תאריך</th>
                     <th className="py-2 px-4 font-semibold">אסמכתא</th>
+                    <th className="py-2 px-4 font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {student.payments.map((p) => (
-                    <tr key={p.id} className="border-b border-[var(--color-border)]/50">
-                      <td className="py-2.5 pe-4">
-                        {p.paymentNumber === 0 ? "נדרים" : `#${p.paymentNumber}`}
-                      </td>
-                      <td className="py-2.5 px-4 font-semibold">
-                        {formatILS(Number(p.amount))}
-                      </td>
-                      <td className="py-2.5 px-4">{p.method ?? "—"}</td>
-                      <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
-                        {p.date ? new Date(p.date).toLocaleDateString("he-IL") : "—"}
-                      </td>
-                      <td className="py-2.5 px-4 text-[var(--color-muted-foreground)] font-mono text-xs">
-                        {p.externalRef ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
+                  {student.payments.map((p) => {
+                    // Nedarim payments are synced from the API — deleting them
+                    // is pointless (they re-materialize), so only manual/other
+                    // rows get a delete control.
+                    const isNedarim =
+                      p.source === "nedarim" ||
+                      p.method === "נדרים פלוס" ||
+                      p.paymentNumber === 0;
+                    return (
+                      <tr key={p.id} className="border-b border-[var(--color-border)]/50">
+                        <td className="py-2.5 pe-4">
+                          {p.paymentNumber === 0 ? "נדרים" : `#${p.paymentNumber}`}
+                        </td>
+                        <td className="py-2.5 px-4 font-semibold">
+                          {formatILS(Number(p.amount))}
+                        </td>
+                        <td className="py-2.5 px-4">{p.method ?? "—"}</td>
+                        <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
+                          {p.date ? new Date(p.date).toLocaleDateString("he-IL") : "—"}
+                        </td>
+                        <td className="py-2.5 px-4 text-[var(--color-muted-foreground)] font-mono text-xs">
+                          {p.externalRef ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-4 text-left">
+                          {!isNedarim && (
+                            <DeletePaymentButton
+                              paymentId={p.id}
+                              label={`${
+                                p.paymentNumber === 0
+                                  ? "נדרים"
+                                  : `#${p.paymentNumber}`
+                              } · ${formatILS(Number(p.amount))}`}
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {student.payments.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="py-6 text-center text-[var(--color-muted-foreground)]"
                       >
                         אין תשלומים לבחור זה עדיין.

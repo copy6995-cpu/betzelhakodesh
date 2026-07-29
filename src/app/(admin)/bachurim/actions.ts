@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { getActiveYear } from "@/lib/year";
 
 // Mirror of SHIUR_NEXT in settings/actions.ts. Kept here so single-student
@@ -243,6 +245,41 @@ export async function promoteStudentToYear(
   revalidatePath(`/bachurim/${sourceStudentId}`);
   revalidatePath(`/parents/${source.parentId}`);
   return { id: created.id };
+}
+
+/**
+ * Delete a single NON-Nedarim payment (manual / other / legacy). Nedarim Plus
+ * payments are materialized from synced transactions and would just
+ * re-appear on the next payment-sync, so deleting them is refused.
+ *
+ * Gated by re-entering the admin password — verified server-side against the
+ * logged-in user's bcrypt hash, so a client can't bypass it.
+ */
+export async function deletePayment(
+  paymentId: string,
+  password: string
+): Promise<void> {
+  const session = await auth();
+  const email = session?.user?.email;
+  if (!email) throw new Error("לא מחובר");
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw new Error("משתמש לא נמצא");
+  const ok = await bcrypt.compare(password ?? "", user.passwordHash);
+  if (!ok) throw new Error("סיסמה שגויה");
+
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: { id: true, studentId: true, source: true, method: true },
+  });
+  if (!payment) throw new Error("תשלום לא נמצא");
+  if (payment.source === "nedarim" || payment.method === "נדרים פלוס") {
+    throw new Error("לא ניתן למחוק תשלום של נדרים פלוס");
+  }
+
+  await prisma.payment.delete({ where: { id: payment.id } });
+  revalidatePath(`/bachurim/${payment.studentId}`);
+  revalidatePath("/payments");
+  revalidatePath("/bachurim");
 }
 
 /**
