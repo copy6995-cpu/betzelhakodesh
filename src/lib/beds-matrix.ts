@@ -8,6 +8,7 @@ import { prisma } from "./prisma";
 export type BedCell = {
   status: "approved" | "outofstock" | null;
   date: string | null;
+  manual: boolean; // the winning reservation was entered by hand (source="manual")
 };
 
 export type BedWeek = {
@@ -122,7 +123,11 @@ export async function loadBedsMatrix(opts: {
   for (const r of reservations) {
     const s = cells.get(r.personalCode) ?? new Map<string, BedCell>();
     const existing = s.get(r.weekKey);
-    let cell: BedCell = { status: null, date: r.date };
+    let cell: BedCell = {
+      status: null,
+      date: r.date,
+      manual: r.source === "manual",
+    };
     if (r.status === "מאושר") cell.status = "approved";
     else if (r.status === "אזל") cell.status = "outofstock";
     if (existing) {

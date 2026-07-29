@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import { formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
 import { loadBedsMatrix, shortDate } from "@/lib/beds-matrix";
 import { SearchBox } from "@/components/search-box";
 import { SyncBedsButton } from "./sync-beds";
 import { BedsExportButton } from "./export-button";
+import { ManualBedButton, type WeekOption } from "./manual-entry";
+import { ManualCell } from "./manual-cell";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +57,24 @@ export default async function BedsPage({
     q: sp.q,
   });
 
+  // Roster + existing weeks for the manual-entry dialog.
+  const rosterRows = await prisma.student.findMany({
+    where: { year: activeYear, archived: false },
+    select: { personalCode: true, firstName: true, lastName: true, yeshiva: true },
+    orderBy: [{ yeshiva: "asc" }, { lastName: "asc" }],
+  });
+  const roster = rosterRows.map((s) => ({
+    code: s.personalCode,
+    name: `${s.lastName} ${s.firstName}`,
+    yeshiva: s.yeshiva,
+  }));
+  const weekOptions: WeekOption[] = weeks.map((w) => ({
+    weekKey: w.weekKey,
+    label: `${w.hebDate ?? w.weekKey} · ${shortDate(w.latestDate)}`,
+    date: w.latestDate,
+    hebDate: w.hebDate,
+  }));
+
   return (
     <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
@@ -73,6 +94,7 @@ export default async function BedsPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ManualBedButton roster={roster} weeks={weekOptions} />
           <BedsExportButton
             year={sp.year}
             scope={scope}
@@ -314,9 +336,19 @@ export default async function BedsPage({
                         return (
                           <td
                             key={w.weekKey}
-                            className="py-1.5 px-1 text-center text-xs bg-[#C6EFCE] font-mono"
+                            className={
+                              "text-center " + (c.manual ? "p-0" : "py-1.5 px-1 text-xs bg-[#C6EFCE] font-mono")
+                            }
                           >
-                            {shortDate(c.date)}
+                            {c.manual ? (
+                              <ManualCell
+                                personalCode={row.code}
+                                weekKey={w.weekKey}
+                                label={shortDate(c.date)}
+                              />
+                            ) : (
+                              shortDate(c.date)
+                            )}
                           </td>
                         );
                       }
