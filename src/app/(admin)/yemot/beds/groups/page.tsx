@@ -17,15 +17,26 @@ function turnoutTone(booked: number, total: number): string {
 export default async function BedGroupsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; week?: string }>;
+  searchParams: Promise<{ year?: string; week?: string; detail?: string }>;
 }) {
   const sp = await searchParams;
   const activeYear = await getActiveYear(sp.year);
-  const { rows, totals, crossGroupStudents, weeks, selectedWeek } =
-    await loadBedGroupReport(activeYear, sp.week);
+  const {
+    rows,
+    totals,
+    crossGroupStudents,
+    weeks,
+    selectedWeek,
+    groups,
+    detailGroup,
+    weeklyDetail,
+    detailTotals,
+  } = await loadBedGroupReport(activeYear, sp.week, sp.detail);
 
   const pct = (b: number, t: number) =>
     t === 0 ? "" : ` (${Math.round((b / t) * 100)}%)`;
+  const selectedLabel =
+    weeks.find((w) => w.weekKey === selectedWeek)?.label ?? "";
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -98,7 +109,7 @@ export default async function BedGroupsPage({
                 לא ברשימה
               </th>
               <th className="py-2.5 px-4 font-semibold text-start">
-                סכום סליקה
+                סליקה בשבוע
               </th>
             </tr>
           </thead>
@@ -170,9 +181,104 @@ export default async function BedGroupsPage({
 
       <p className="text-xs text-[var(--color-muted-foreground)] mt-3">
         &quot;נרשמו השבוע&quot; = כמה מהקבועים (רשומי אש״ל) בקבוצה הזמינו מיטה
-        לשבוע שנבחר, מתוך כלל הקבועים. אדום = פחות מ-50%. סכום הסליקה = חיובי
-        אשראי מאושרים בימות המשיח.
+        לשבוע שנבחר, מתוך כלל הקבועים. אדום = פחות מ-50%. &quot;סליקה בשבוע&quot;
+        = סכום &quot;סכום לתשלום&quot; (חיוב המיטה) של הזמנות הקבוצה באותו שבוע.
       </p>
+
+      {/* Weekly breakdown for one group (defaults to 23) — like the calendar. */}
+      <div className="mt-10">
+        <div className="flex items-end justify-between gap-3 flex-wrap mb-3">
+          <h2 className="text-xl font-bold text-[var(--color-primary)]">
+            פירוט שבועי — קבוצה {detailGroup ?? ""}
+          </h2>
+          <form method="GET" className="flex items-end gap-2">
+            {selectedWeek && (
+              <input type="hidden" name="week" value={selectedWeek} />
+            )}
+            <label className="flex flex-col text-xs">
+              <span className="text-[var(--color-muted-foreground)] font-semibold uppercase tracking-wider mb-1">
+                קבוצה
+              </span>
+              <select
+                name="detail"
+                defaultValue={detailGroup ?? ""}
+                className="h-10 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm"
+              >
+                {groups.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="h-10 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)]"
+            >
+              הצג
+            </button>
+          </form>
+        </div>
+
+        <div className="bg-white rounded-xl card-shadow overflow-x-auto max-w-xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-[var(--color-muted)] text-right">
+                <th className="py-2.5 px-4 font-semibold">שבוע</th>
+                <th className="py-2.5 px-4 font-semibold text-center">הזמנות</th>
+                <th className="py-2.5 px-4 font-semibold text-start">
+                  נכנס (סליקה)
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {weeklyDetail.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="py-4 px-4 text-center text-[var(--color-muted-foreground)]"
+                  >
+                    אין נתונים לקבוצה זו.
+                  </td>
+                </tr>
+              ) : (
+                weeklyDetail.map((w) => (
+                  <tr
+                    key={w.weekKey}
+                    className={
+                      "border-t border-[var(--color-border)]/50 hover:bg-[var(--color-muted)]/40 " +
+                      (w.weekKey === selectedWeek ? "bg-[var(--color-accent)]/5" : "")
+                    }
+                  >
+                    <td className="py-2 px-4 font-medium">{w.label}</td>
+                    <td className="py-2 px-4 text-center">
+                      {formatNum(w.bookings)}
+                    </td>
+                    <td className="py-2 px-4 text-start font-mono">
+                      {w.payment ? formatILS(w.payment) : "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="bg-[var(--color-primary)] text-white font-bold">
+                <td className="py-2.5 px-4">סה״כ</td>
+                <td className="py-2.5 px-4 text-center">
+                  {formatNum(detailTotals.bookings)}
+                </td>
+                <td className="py-2.5 px-4 text-start font-mono">
+                  {formatILS(detailTotals.payment)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p className="text-xs text-[var(--color-muted-foreground)] mt-2">
+          כמה הזמנות וכמה כסף (&quot;סכום לתשלום&quot;) נכנסו בכל שבוע לקבוצה
+          שנבחרה. השבוע שנבחר למעלה מודגש.
+        </p>
+      </div>
     </div>
   );
 }
