@@ -121,7 +121,7 @@ export default async function BedGroupsPage({
                     turnoutTone(r.bookedThisWeek, r.subscribers)
                   }
                 >
-                  {formatNum(r.bookedThisWeek)} / {formatNum(r.subscribers)}
+                  {formatNum(r.bookedThisWeek)} מתוך {formatNum(r.subscribers)}
                   <span className="text-xs opacity-80">
                     {pct(r.bookedThisWeek, r.subscribers)}
                   </span>
@@ -148,7 +148,8 @@ export default async function BedGroupsPage({
                 {formatNum(totals.subscribers)}
               </td>
               <td className="py-2.5 px-4 text-center">
-                {formatNum(totals.bookedThisWeek)} / {formatNum(totals.subscribers)}
+                {formatNum(totals.bookedThisWeek)} מתוך{" "}
+                {formatNum(totals.subscribers)}
                 <span className="text-xs opacity-80">
                   {pct(totals.bookedThisWeek, totals.subscribers)}
                 </span>
