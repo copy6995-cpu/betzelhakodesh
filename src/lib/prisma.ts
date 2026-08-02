@@ -1,17 +1,21 @@
 import "dotenv/config";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
-// Local SQLite via better-sqlite3 driver adapter. Prisma 7 requires a driver
-// adapter for SQLite too — no more schema-level `url`. The adapter opens the
-// DB file itself given a `file:` URL.
+// Postgres (Supabase) via the pg driver adapter. Runtime queries go through the
+// transaction pooler (DATABASE_URL, port 6543) so serverless functions don't
+// exhaust direct connections. ssl.rejectUnauthorized=false keeps the connection
+// encrypted without pinning Supabase's CA chain.
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
-  const url = process.env.DATABASE_URL ?? "file:./betzel.db";
-  const adapter = new PrismaBetterSqlite3({ url });
+  const connectionString = process.env.DATABASE_URL;
+  const adapter = new PrismaPg({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+  });
   return new PrismaClient({ adapter });
 }
 
