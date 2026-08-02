@@ -103,7 +103,7 @@ export async function syncYemotFull(): Promise<
     if (sources.length === 0) throw new Error("לא הוגדרו נתיבי מקור");
     const result = await apiSyncFull({
       token,
-      sources: sources.map((s) => ({ path: s.path, kind: s.kind })),
+      sources: sources.map((s) => ({ path: s.path })),
     });
     await prisma.appSetting.upsert({
       where: { key: "yemot_last_sync" },
@@ -150,11 +150,7 @@ export async function syncYemotLatest(): Promise<
     if (sources.length === 0) throw new Error("לא הוגדרו נתיבי מקור");
     const result = await apiSyncLatest({
       token,
-      sources: sources.map((s) => ({
-        path: s.path,
-        current: s.current,
-        kind: s.kind,
-      })),
+      sources: sources.map((s) => ({ path: s.path, current: s.current })),
     });
     await prisma.appSetting.upsert({
       where: { key: "yemot_last_sync" },
