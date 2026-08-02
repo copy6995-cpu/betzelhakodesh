@@ -40,12 +40,12 @@ export default async function TransactionsPage({
     activeYearHooks = students.map((s) => s.nedarimHook!).filter(Boolean);
   }
 
-  // Big year rosters (תשפ״ו has ~1160 hooked students, תשפ״ז ~750) push past
-  // SQLite's 999-param default on the `IN (...)` clause, crashing the page.
-  // Once we're over 500 hooks we skip Prisma's WHERE-IN and use raw SQL with
-  // a subquery join instead — the DB handles the whole set without binding
-  // each hook as a param.
-  const useRawJoin = scope === "year" && !hook && activeYearHooks.length > 500;
+  // The raw-SQL subquery path below only existed to dodge SQLite's 999-param
+  // limit on `IN (...)`. Postgres allows 65,535 params, so Prisma's WHERE-IN
+  // handles even the biggest year roster fine — and the raw SQL was SQLite
+  // dialect (unquoted identifiers, `?` params, `archived = 0`) that Postgres
+  // rejects outright. Always take the Prisma path now.
+  const useRawJoin = false;
 
   // Only the columns the JSX below actually reads. Both branches (raw SQL
   // and Prisma findMany) produce compatible shapes.

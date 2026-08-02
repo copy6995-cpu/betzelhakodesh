@@ -250,8 +250,9 @@ export async function syncTransactionsAll(opts: {
   // Cast to INTEGER in SQL so we don't hit the string-sort trap where "9999999"
   // comes out "greater" than "10000000".
   const existingMax = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT transactionId AS id FROM NedarimTransaction
-    ORDER BY CAST(transactionId AS INTEGER) DESC
+    SELECT "transactionId" AS id FROM "NedarimTransaction"
+    WHERE "transactionId" ~ '^[0-9]+$'
+    ORDER BY "transactionId"::bigint DESC
     LIMIT 1
   `;
   if (existingMax.length > 0) {
@@ -536,9 +537,9 @@ export async function syncFormAll(opts: {
   // Numeric-sort the string rowId column so a decimal-place cross doesn't
   // pick "9999" over "10000".
   const existingMax = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT rowId AS id FROM NedarimFormSubmission
-    WHERE tofesId = ${opts.tofesId}
-    ORDER BY CAST(rowId AS INTEGER) DESC
+    SELECT "rowId" AS id FROM "NedarimFormSubmission"
+    WHERE "tofesId" = ${opts.tofesId} AND "rowId" ~ '^[0-9]+$'
+    ORDER BY "rowId"::bigint DESC
     LIMIT 1
   `;
   if (existingMax.length > 0) lastId = existingMax[0].id;

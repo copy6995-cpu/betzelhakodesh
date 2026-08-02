@@ -63,6 +63,9 @@ const END_DATE_FIELD = "Time_1";
  *  "אר״י" / "חו״ל" (with gershayim); the app's select uses the bare
  *  "ארי" / "חול". Verified against 400 submissions. */
 const ARICHUL_FIELD = "TypeCuty";
+/** Phone the parent typed on the form (Nedarim's `Tel`). Copied to the
+ *  matched student's Parent.phone so the roster keeps the latest number. */
+const PHONE_FIELD = "Tel";
 const PAYMENT_METHOD_HOOK = "נדרים פלוס";
 
 /** Normalize TypeCuty → the app's canonical "ארי" / "חול" (strip quote
@@ -114,6 +117,7 @@ export async function attachFormsToStudents(
     paymentsCount: number | null;
     endDateLabel: string | null;
     ariChul: string | null;
+    phone: string | null;
   };
   const planByYearCode = new Map<string, Plan>();
   const perYearScanned = new Map<string, number>();
@@ -174,6 +178,7 @@ export async function attachFormsToStudents(
       endDateLabel:
         String(obj[END_DATE_FIELD] ?? "").trim() || null,
       ariChul: normalizeAriChul(obj[ARICHUL_FIELD]),
+      phone: String(obj[PHONE_FIELD] ?? "").trim() || null,
     });
   }
 
@@ -242,6 +247,8 @@ export async function attachFormsToStudents(
       paymentsCount: true,
       endDateLabel: true,
       ariChul: true,
+      parentId: true,
+      parent: { select: { phone: true } },
     },
   });
   const byYearCode = new Map<string, (typeof candidates)[number]>();
@@ -313,6 +320,13 @@ export async function attachFormsToStudents(
       await prisma.student.update({
         where: { id: student.id },
         data: updates,
+      });
+    }
+    // Copy the phone the parent typed on the form (Tel) onto the Parent row.
+    if (plan.phone && student.parentId && plan.phone !== student.parent?.phone) {
+      await prisma.parent.update({
+        where: { id: student.parentId },
+        data: { phone: plan.phone },
       });
     }
   }
