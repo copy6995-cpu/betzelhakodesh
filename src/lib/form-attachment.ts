@@ -261,6 +261,21 @@ export async function attachFormsToStudents(
     unmatched = 0;
   const perYearMatched = new Map<string, number>();
 
+  // Collect the writes and flush them in parallel batches at the end. Awaiting
+  // each update in the loop is fine on a local SQLite file but crawls over the
+  // network pooler (~900 forms × a round-trip each = minutes / function timeout).
+  type StudentUpdate = {
+    nedarimHook?: string;
+    registeredEshel?: boolean;
+    price?: number;
+    paymentMethod?: string;
+    paymentsCount?: number;
+    endDateLabel?: string;
+    ariChul?: string;
+  };
+  const studentUpdates: { id: string; data: StudentUpdate }[] = [];
+  const parentUpdates: { id: string; phone: string }[] = [];
+
   for (const plan of planByYearCode.values()) {
     const student = byYearCode.get(`${plan.year}|${plan.code}`);
     if (!student) {
@@ -270,15 +285,7 @@ export async function attachFormsToStudents(
     matched++;
     perYearMatched.set(plan.year, (perYearMatched.get(plan.year) ?? 0) + 1);
 
-    const updates: {
-      nedarimHook?: string;
-      registeredEshel?: boolean;
-      price?: number;
-      paymentMethod?: string;
-      paymentsCount?: number;
-      endDateLabel?: string;
-      ariChul?: string;
-    } = {};
+    const updates: StudentUpdate = {};
     if (plan.hook) {
       if (!student.nedarimHook) {
         updates.nedarimHook = plan.hook;
@@ -317,18 +324,33 @@ export async function attachFormsToStudents(
       updates.paymentMethod = PAYMENT_METHOD_HOOK;
     }
     if (Object.keys(updates).length > 0) {
-      await prisma.student.update({
-        where: { id: student.id },
-        data: updates,
-      });
+      studentUpdates.push({ id: student.id, data: updates });
     }
     // Copy the phone the parent typed on the form (Tel) onto the Parent row.
     if (plan.phone && student.parentId && plan.phone !== student.parent?.phone) {
-      await prisma.parent.update({
-        where: { id: student.parentId },
-        data: { phone: plan.phone },
-      });
+      parentUpdates.push({ id: student.parentId, phone: plan.phone });
     }
+  }
+
+  // Flush the collected writes in parallel batches (concurrency-capped so we
+  // don't exhaust the pooler). Turns minutes of sequential round-trips into
+  // a couple of seconds.
+  const BATCH = 20;
+  for (let i = 0; i < studentUpdates.length; i += BATCH) {
+    await Promise.all(
+      studentUpdates
+        .slice(i, i + BATCH)
+        .map((u) => prisma.student.update({ where: { id: u.id }, data: u.data }))
+    );
+  }
+  for (let i = 0; i < parentUpdates.length; i += BATCH) {
+    await Promise.all(
+      parentUpdates
+        .slice(i, i + BATCH)
+        .map((u) =>
+          prisma.parent.update({ where: { id: u.id }, data: { phone: u.phone } })
+        )
+    );
   }
 
   const perYear = [...perYearScanned.entries()]
