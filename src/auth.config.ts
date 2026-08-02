@@ -8,10 +8,14 @@ import type { NextAuthConfig } from "next-auth";
  * and server components only.
  */
 export const authConfig = {
-  // We run behind Traefik (the Host header is set by the proxy), so NextAuth's
+  // We run behind a proxy (Vercel / Traefik set the Host header), so NextAuth's
   // default strict host check would reject the request with `UntrustedHost`.
   // Enabling trustHost tells it to use the proxied Host/X-Forwarded-* values.
   trustHost: true,
+  // NextAuth v5 defaults to reading AUTH_SECRET; accept the classic
+  // NEXTAUTH_SECRET too so the same env var works everywhere. Without a secret
+  // in production it throws "There is a problem with the server configuration".
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/auth/signin" },
   providers: [],
