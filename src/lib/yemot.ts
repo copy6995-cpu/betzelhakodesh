@@ -122,6 +122,89 @@ export async function fetchWeek(opts: {
   return o.data ?? [];
 }
 
+/** Read one .ymgr file by its full name (used for cancellation files whose
+ *  names carry a timestamp we can't reconstruct from a week key). */
+export async function fetchApprovalFile(opts: {
+  token: string;
+  base: string;
+  fileName: string;
+}): Promise<YmgrRow[]> {
+  const wath = `${opts.base}/${opts.fileName}`;
+  const o = (await apiCall("RenderYMGRFile", {
+    token: opts.token,
+    convertType: "json",
+    wath,
+  })) as { responseStatus?: string; data?: YmgrRow[]; message?: string };
+  if (!o || o.responseStatus !== "OK") {
+    if (o?.responseStatus === "EXCEPTION" && o.message) throw new Error(o.message);
+    return [];
+  }
+  return o.data ?? [];
+}
+
+/** List the weekly cancellation files in a שלוחה-5 folder
+ *  (ApprovalOk.A-<seq>-<timestamp>.ymgr). weekKey = the stable "A-<seq>" part
+ *  so re-syncs replace the same file instead of duplicating it. */
+export async function listCancelFiles(opts: {
+  token: string;
+  path: string;
+}): Promise<{ base: string; files: Array<{ name: string; weekKey: string }> }> {
+  const candidates = [opts.path, opts.path.replace(/^ivr2:/, "ivr2:/")];
+  for (const p of candidates) {
+    const o = (await apiCall("GetIVR2Dir", {
+      token: opts.token,
+      path: p,
+    })) as {
+      responseStatus?: string;
+      files?: Array<{ name?: string }>;
+      message?: string;
+    };
+    if (o && o.responseStatus === "OK" && Array.isArray(o.files)) {
+      const files: Array<{ name: string; weekKey: string }> = [];
+      for (const f of o.files) {
+        const name = f?.name ?? "";
+        const m = name.match(/^ApprovalOk\.(A-\d+)(?:-\d+)?\.ymgr$/);
+        if (m) files.push({ name, weekKey: m[1] });
+      }
+      if (files.length > 0) return { base: p, files };
+    }
+    if (o && o.responseStatus === "EXCEPTION") {
+      throw new Error(o.message ?? "שגיאה מימות המשיח");
+    }
+  }
+  return { base: opts.path, files: [] };
+}
+
+/** Sync one cancellation source: read each weekly ApprovalOk file and replace
+ *  its rows. Stored as ordinary reservations under this source; because the
+ *  source is marked kind="cancellation", loadCancellations() treats them as
+ *  cancellations and voids the matching booking (by date, within 7 days). */
+export async function syncCancellationSource(opts: {
+  token: string;
+  path: string;
+}): Promise<{ inserted: number; files: number }> {
+  const { base, files } = await listCancelFiles({
+    token: opts.token,
+    path: opts.path,
+  });
+  let inserted = 0;
+  for (const f of files) {
+    const rows = await fetchApprovalFile({
+      token: opts.token,
+      base,
+      fileName: f.name,
+    });
+    await prisma.yemotBedReservation.deleteMany({
+      where: { source: opts.path, weekKey: f.weekKey },
+    });
+    for (const row of rows) {
+      const ok = await persistRow({ source: opts.path, weekKey: f.weekKey, row });
+      if (ok) inserted++;
+    }
+  }
+  return { inserted, files: files.length };
+}
+
 /** Upsert a single row into BedReservation. Ignored if personalCode missing. */
 export async function persistRow(opts: {
   source: string;
@@ -199,18 +282,30 @@ export async function syncItems(opts: {
   return { inserted, deletedWeeks: touchedKeys.size };
 }
 
-/** Full sync: pull every week from every source. */
+/** Full sync: pull every week from every source (cancellation sources read
+ *  their ApprovalOk files instead of the weekly ApprovalAll files). */
 export async function syncFull(opts: {
   token: string;
-  sources: Array<{ path: string }>;
+  sources: Array<{ path: string; kind?: string }>;
 }): Promise<{ inserted: number; weeks: number }> {
   const items: Array<{ source: string; base: string; weekKey: string }> = [];
+  let cancelInserted = 0;
+  let cancelWeeks = 0;
   for (const s of opts.sources) {
-    const { base, weeks } = await listWeeks({ token: opts.token, path: s.path });
-    for (const w of weeks) items.push({ source: s.path, base, weekKey: w });
+    if (s.kind === "cancellation") {
+      const r = await syncCancellationSource({ token: opts.token, path: s.path });
+      cancelInserted += r.inserted;
+      cancelWeeks += r.files;
+    } else {
+      const { base, weeks } = await listWeeks({ token: opts.token, path: s.path });
+      for (const w of weeks) items.push({ source: s.path, base, weekKey: w });
+    }
   }
   const r = await syncItems({ token: opts.token, items });
-  return { inserted: r.inserted, weeks: r.deletedWeeks };
+  return {
+    inserted: r.inserted + cancelInserted,
+    weeks: r.deletedWeeks + cancelWeeks,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -475,17 +570,28 @@ export async function syncLogCreditCard(opts: {
   };
 }
 
-/** Sync only the most recent week across `current` sources. */
+/** Sync only the most recent week across `current` sources. Cancellation
+ *  sources are small, so we refresh all their weekly files each run. */
 export async function syncLatest(opts: {
   token: string;
-  sources: Array<{ path: string; current: boolean }>;
+  sources: Array<{ path: string; current: boolean; kind?: string }>;
 }): Promise<{ inserted: number; weekKey: string | null }> {
   const currentSources = opts.sources.filter((s) => s.current);
   if (currentSources.length === 0) return { inserted: 0, weekKey: null };
 
-  // Discover the latest week across all `current` sources.
+  let cancelInserted = 0;
+  for (const s of currentSources.filter((s) => s.kind === "cancellation")) {
+    const r = await syncCancellationSource({ token: opts.token, path: s.path });
+    cancelInserted += r.inserted;
+  }
+  const bookingSources = currentSources.filter((s) => s.kind !== "cancellation");
+  if (bookingSources.length === 0) {
+    return { inserted: cancelInserted, weekKey: null };
+  }
+
+  // Discover the latest week across all booking `current` sources.
   const listings = await Promise.all(
-    currentSources.map(async (s) => ({
+    bookingSources.map(async (s) => ({
       source: s.path,
       ...(await listWeeks({ token: opts.token, path: s.path })),
     }))
