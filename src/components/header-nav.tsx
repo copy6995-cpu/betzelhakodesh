@@ -35,13 +35,13 @@ export function HeaderNav({
     key === null || role === "admin" || sections.includes(key);
 
   return (
-    <nav className="hidden md:flex items-center gap-1">
+    <nav className="hidden md:flex items-center gap-1 min-w-0 overflow-x-auto">
       {LINKS.filter((l) => canSee(l.key)).map((l) => (
         <Link
           key={l.href}
           href={l.href}
           data-active={isActive(pathname, l)}
-          className="nav-link-gold px-3 text-sm font-medium text-white/80 hover:text-white transition-colors"
+          className="nav-link-gold shrink-0 whitespace-nowrap px-3 text-sm font-medium text-white/80 hover:text-white transition-colors"
         >
           {l.label}
         </Link>
