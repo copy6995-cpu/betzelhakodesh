@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CalendarDayRow } from "@/lib/hebrew-calendar";
 import type { CalendarCounts } from "@/lib/calendar-export";
 import { saveCalendarConfig, saveCalendarWeek } from "./actions";
+import type { SupervisorPrices } from "./price-table";
 
 const SUP_COUNT = 9;
 
@@ -77,6 +78,48 @@ function computeCountsClient(
   return c;
 }
 
+/** Per-supervisor ₪ cost: each לינה/קימה cell holds a level number that maps to
+ *  a price (the price table); this sums those prices across all days. */
+type SupCost = {
+  sup: { lina: number; kima: number }[];
+  totalLina: number;
+  totalKima: number;
+  total: number;
+};
+
+function computeCostClient(
+  values: Record<string, WeekValues>,
+  dayKeys: string[],
+  prices: SupervisorPrices
+): SupCost {
+  const cost: SupCost = {
+    sup: Array.from({ length: SUP_COUNT }, () => ({ lina: 0, kima: 0 })),
+    totalLina: 0,
+    totalKima: 0,
+    total: 0,
+  };
+  for (const k of dayKeys) {
+    const v = values[k];
+    if (!v) continue;
+    for (let i = 0; i < SUP_COUNT; i++) {
+      const lKey = (v.sup?.[i]?.lina ?? "").trim();
+      const kKey = (v.sup?.[i]?.kima ?? "").trim();
+      const lp = lKey ? prices.lina[lKey] : undefined;
+      const kp = kKey ? prices.kima[kKey] : undefined;
+      if (typeof lp === "number") {
+        cost.sup[i].lina += lp;
+        cost.totalLina += lp;
+      }
+      if (typeof kp === "number") {
+        cost.sup[i].kima += kp;
+        cost.totalKima += kp;
+      }
+    }
+  }
+  cost.total = cost.totalLina + cost.totalKima;
+  return cost;
+}
+
 export function CalendarGrid({
   yearLabel,
   startISO,
@@ -86,6 +129,7 @@ export function CalendarGrid({
   days,
   savedValues,
   counts,
+  supervisorPrices,
 }: {
   yearLabel: string;
   startISO: string;
@@ -95,6 +139,7 @@ export function CalendarGrid({
   days: CalendarDayRow[];
   savedValues: Record<string, Partial<WeekValues>>;
   counts: CalendarCounts;
+  supervisorPrices: SupervisorPrices;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -152,6 +197,15 @@ export function CalendarGrid({
       }
     });
   }
+
+  // Recomputed each render (a save triggers setLiveCounts → re-render, and a
+  // price-table edit revalidates → new prices prop → re-render), so the ₪
+  // summary tracks both cell edits and price changes without extra state.
+  const liveCost = computeCostClient(
+    valuesRef.current,
+    dayKeys,
+    supervisorPrices
+  );
 
   return (
     <div>
@@ -391,6 +445,75 @@ export function CalendarGrid({
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      {/* Supervisor cost summary — the number in each לינה/קימה cell maps to a
+          ₪ price (set in the price table above); this sums them per supervisor
+          and overall. */}
+      <div className="mt-4 bg-white rounded-xl card-shadow p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h2 className="text-sm font-semibold text-[var(--color-primary)]">
+            סיכום עלות משגיחים
+          </h2>
+          <div className="text-sm">
+            <span className="text-[var(--color-muted-foreground)]">לינה </span>
+            <span className="font-semibold">
+              ₪{liveCost.totalLina.toLocaleString("he-IL")}
+            </span>
+            <span className="mx-2 text-[var(--color-border)]">·</span>
+            <span className="text-[var(--color-muted-foreground)]">קימה </span>
+            <span className="font-semibold">
+              ₪{liveCost.totalKima.toLocaleString("he-IL")}
+            </span>
+            <span className="mx-2 text-[var(--color-border)]">·</span>
+            <span className="text-[var(--color-muted-foreground)]">סה״כ </span>
+            <span className="font-bold text-[var(--color-accent)] text-base">
+              ₪{liveCost.total.toLocaleString("he-IL")}
+            </span>
+          </div>
+        </div>
+        <table className="text-sm w-full max-w-md">
+          <thead>
+            <tr className="text-xs text-[var(--color-muted-foreground)]">
+              <th className="py-1 pe-4 font-normal text-right">משגיח</th>
+              <th className="py-1 px-3 font-normal">לינה ₪</th>
+              <th className="py-1 px-3 font-normal">קימה ₪</th>
+              <th className="py-1 px-3 font-normal">סה״כ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: SUP_COUNT }, (_, i) => {
+              const c = liveCost.sup[i];
+              const name = (supervisorNames[i] ?? "").trim();
+              if (!name && c.lina === 0 && c.kima === 0) return null;
+              return (
+                <tr
+                  key={i}
+                  className="border-t border-[var(--color-border)]/40"
+                >
+                  <td className="py-1 pe-4 text-right">
+                    {name || `משגיח ${i + 1}`}
+                  </td>
+                  <td className="py-1 px-3 text-center">
+                    {c.lina ? `₪${c.lina.toLocaleString("he-IL")}` : "—"}
+                  </td>
+                  <td className="py-1 px-3 text-center">
+                    {c.kima ? `₪${c.kima.toLocaleString("he-IL")}` : "—"}
+                  </td>
+                  <td className="py-1 px-3 text-center font-semibold">
+                    ₪{(c.lina + c.kima).toLocaleString("he-IL")}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {liveCost.total === 0 && (
+          <p className="text-xs text-[var(--color-muted-foreground)] mt-2">
+            אין עדיין עלויות. מלאו את המחירים בטבלת המחירים למעלה, ורשמו בתאי
+            הלינה/קימה של המשגיחים את המספר המתאים.
+          </p>
+        )}
       </div>
     </div>
   );

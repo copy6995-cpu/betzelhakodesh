@@ -29,6 +29,23 @@ export async function saveCalendarConfig(
   revalidatePath("/calendar");
 }
 
+/** Save the supervisor price table (level → ₪ for לינה and קימה). Stored as a
+ *  global AppSetting JSON: { lina: { "1": 500, ... }, kima: { ... } }. */
+export async function saveSupervisorPrices(pricesJson: string): Promise<void> {
+  // Validate it parses so we never persist junk.
+  try {
+    JSON.parse(pricesJson);
+  } catch {
+    throw new Error("מבנה מחירים שגוי");
+  }
+  await prisma.appSetting.upsert({
+    where: { key: "calendar_supervisor_prices" },
+    update: { value: pricesJson },
+    create: { key: "calendar_supervisor_prices", value: pricesJson },
+  });
+  revalidatePath("/calendar");
+}
+
 /**
  * Persist one Shabbat row's editable cells. `values` is the full per-week
  * object ({ yeshivot, linaChul, linaAri, sup }). No revalidate — the grid is

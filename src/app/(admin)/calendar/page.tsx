@@ -10,6 +10,10 @@ import {
   computeCalendarCounts,
 } from "@/lib/calendar-export";
 import { CalendarGrid, type WeekValues } from "./grid";
+import {
+  SupervisorPriceTable,
+  type SupervisorPrices,
+} from "./price-table";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +72,18 @@ export default async function CalendarPage() {
     yeshivot
   );
 
+  const priceRow = await prisma.appSetting.findUnique({
+    where: { key: "calendar_supervisor_prices" },
+  });
+  const supervisorPrices: SupervisorPrices = (() => {
+    try {
+      const p = JSON.parse(priceRow?.value ?? "{}");
+      return { lina: p.lina ?? {}, kima: p.kima ?? {} };
+    } catch {
+      return { lina: {}, kima: {} };
+    }
+  })();
+
   return (
     <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8" dir="rtl">
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
@@ -88,6 +104,8 @@ export default async function CalendarPage() {
         </Link>
       </div>
 
+      <SupervisorPriceTable initial={supervisorPrices} />
+
       <CalendarGrid
         yearLabel={yearLabel}
         startISO={isoOf(range.start)}
@@ -97,6 +115,7 @@ export default async function CalendarPage() {
         days={days}
         savedValues={savedValues}
         counts={counts}
+        supervisorPrices={supervisorPrices}
       />
     </div>
   );
