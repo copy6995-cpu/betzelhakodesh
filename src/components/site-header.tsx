@@ -11,9 +11,12 @@ export async function SiteHeader() {
     getAvailableYears(),
     auth(),
   ]);
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  const sections =
-    (session?.user as { sections?: string[] } | undefined)?.sections ?? [];
+  const sessionUser = session?.user as
+    | { role?: string; sections?: string[]; name?: string | null; email?: string | null }
+    | undefined;
+  const role = sessionUser?.role;
+  const sections = sessionUser?.sections ?? [];
+  const displayName = sessionUser?.name || sessionUser?.email || "";
   return (
     <header className="header-navy text-white sticky top-0 z-50">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -34,6 +37,18 @@ export async function SiteHeader() {
               activeYear={activeYear}
               availableYears={availableYears}
             />
+            {sessionUser && (
+              <Link
+                href="/account"
+                title="החשבון שלי — החלפת סיסמה"
+                className="flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors"
+              >
+                <span aria-hidden>🔑</span>
+                <span className="hidden sm:inline max-w-[160px] truncate">
+                  {displayName}
+                </span>
+              </Link>
+            )}
             <SignOutButton />
           </div>
         </div>
