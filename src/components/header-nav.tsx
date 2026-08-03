@@ -35,7 +35,7 @@ export function HeaderNav({
     key === null || role === "admin" || sections.includes(key);
 
   return (
-    <nav className="hidden md:flex items-center gap-1 min-w-0 overflow-x-auto">
+    <nav className="hidden md:flex items-center gap-1">
       {LINKS.filter((l) => canSee(l.key)).map((l) => (
         <Link
           key={l.href}
