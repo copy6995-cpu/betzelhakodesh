@@ -12,7 +12,11 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+  // "admin" = full access + can manage users. "user" = limited to `sections`.
   role         String   @default("admin")
+  // JSON array of section keys a non-admin user may access (see lib/sections).
+  // Ignored for admins. Example: ["bachurim","payments","calendar"].
+  sections     String   @default("[]")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

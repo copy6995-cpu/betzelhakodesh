@@ -1,4 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
+import { NextResponse } from "next/server";
+import { canAccessPath } from "@/lib/sections";
 
 /**
  * Edge-safe auth config. No bcrypt, no Prisma, no Node-only imports. This
@@ -24,6 +26,7 @@ export const authConfig = {
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role ?? "admin";
+        token.sections = (user as { sections?: string[] }).sections ?? [];
       }
       return token;
     },
@@ -31,6 +34,8 @@ export const authConfig = {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as { role?: string }).role = token.role as string;
+        (session.user as { sections?: string[] }).sections =
+          (token.sections as string[]) ?? [];
       }
       return session;
     },
@@ -39,7 +44,15 @@ export const authConfig = {
       const isAuthRoute =
         pathname.startsWith("/auth") || pathname.startsWith("/api/auth");
       if (isAuthRoute) return true;
-      return !!auth?.user;
+      if (!auth?.user) return false; // not signed in → redirected to signIn
+
+      // Section-level access: admins pass; others are limited to their granted
+      // sections. Blocked-but-signed-in users go to the dashboard rather than
+      // the sign-in page.
+      const role = (auth.user as { role?: string }).role;
+      const sections = (auth.user as { sections?: string[] }).sections ?? [];
+      if (canAccessPath(role, sections, pathname)) return true;
+      return NextResponse.redirect(new URL("/", request.nextUrl));
     },
   },
 } satisfies NextAuthConfig;

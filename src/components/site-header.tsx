@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { getActiveYear, getAvailableYears } from "@/lib/year";
+import { auth } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
 import { HeaderNav } from "./header-nav";
 import { YearSwitcher } from "./year-switcher";
 
 export async function SiteHeader() {
-  const [activeYear, availableYears] = await Promise.all([
+  const [activeYear, availableYears, session] = await Promise.all([
     getActiveYear(),
     getAvailableYears(),
+    auth(),
   ]);
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const sections =
+    (session?.user as { sections?: string[] } | undefined)?.sections ?? [];
   return (
     <header className="header-navy text-white sticky top-0 z-50">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -22,7 +27,7 @@ export async function SiteHeader() {
                 בצל הקודש
               </span>
             </Link>
-            <HeaderNav />
+            <HeaderNav role={role} sections={sections} />
           </div>
           <div className="flex items-center gap-3">
             <YearSwitcher

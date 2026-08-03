@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear, getAvailableYears } from "@/lib/year";
+import { auth } from "@/lib/auth";
 import { SettingsYearForm } from "./year-form";
 import { EndDatesEditor } from "./end-dates-editor";
 import { ensureEndDateOptions } from "./actions";
@@ -9,6 +10,9 @@ import { END_DATE_SEASONS, orderSeasons } from "@/lib/eshel";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  const session = await auth();
+  const isAdmin =
+    (session?.user as { role?: string } | undefined)?.role === "admin";
   const activeYear = await getActiveYear();
   // Guarantee the active year always has its four season rows to edit.
   await ensureEndDateOptions(activeYear);
@@ -55,6 +59,25 @@ export default async function SettingsPage() {
       <h1 className="text-3xl font-bold text-[var(--color-primary)] mb-8">הגדרות</h1>
 
       <div className="space-y-6">
+        {isAdmin && (
+          <section className="bg-white rounded-xl card-shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-[var(--color-primary)]">
+                משתמשים והרשאות
+              </h2>
+              <Link
+                href="/settings/users"
+                className="text-sm text-[var(--color-accent)] hover:underline"
+              >
+                ניהול ←
+              </Link>
+            </div>
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              הוספת משתמשים חדשים ומתן גישה לכל אחד למדורים הרלוונטיים בלבד.
+            </p>
+          </section>
+        )}
+
         <section className="bg-white rounded-xl card-shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-[var(--color-primary)]">
