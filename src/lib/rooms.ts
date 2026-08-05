@@ -101,19 +101,32 @@ function bookingAriChul(raw: string): string {
   }
 }
 
+/** Parse Yemot's "dd/mm/yyyy" reservation date into a Date. Null on failure. */
+function parseDmy(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s.trim());
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 /**
- * Per-yeshiva room demand for ONE week (the week being allocated):
- *  - נרשמו (אר״י/חו״ל): booked a bed this week in a regular group (not 23) —
+ * Per-yeshiva room demand for a DATE RANGE (by the Yemot reservation date):
+ *  - נרשמו (אר״י/חו״ל): booked a bed in the range in a regular group (not 23) —
  *    the אר״י/חו״ל split comes from the BOOKING (גזירה שביעית), not the אש״ל form
- *  - לא נרשמו (אר״י/חו״ל): registered for אש״ל but did NOT book a bed this week
+ *  - לא נרשמו (אר״י/חו״ל): registered for אש״ל but did NOT book in the range
  *    (split here is the אש״ל registration's אר״י/חו״ל)
- *  - חד-פעמי: booked a bed this week in GROUP 23 (the casual/one-time group)
+ *  - חד-פעמי: booked a bed in the range in GROUP 23 (the casual/one-time group)
  * סה״כ = נרשמו + חד-פעמי (only those who actually booked). A student who
- * neither booked this week nor is אש״ל-registered isn't counted.
+ * neither booked in the range nor is אש״ל-registered isn't counted.
+ * (The reservation weekKey is "YYYY-WW" while allocation weeks are "YYYY-MM-DD",
+ * so we filter on the reservation date, never on weekKey equality.)
  */
 export async function loadRoomDemand(
   activeYear: string,
-  weekKey: string | null
+  from: Date,
+  to: Date
 ): Promise<{
   rows: YeshivaDemand[];
   totals: DemandTotals;
@@ -130,20 +143,27 @@ export async function loadRoomDemand(
     }),
     prisma.yemotBedReservation.findMany({
       where: { status: "מאושר" },
-      select: { personalCode: true, weekKey: true, source: true, raw: true },
+      select: {
+        personalCode: true,
+        weekKey: true,
+        source: true,
+        raw: true,
+        date: true,
+      },
     }),
     loadCancellations(),
   ]);
 
-  // Bed bookings for the SELECTED week only. For "נרשמו" the אר״י/חו״ל split
-  // comes from the BOOKING itself (גזירה שביעית), not the אש״ל registration.
-  const regularThisWeek = new Map<string, string>(); // personalCode → booking אר״י/חו״ל
-  const group23ThisWeek = new Set<string>();
+  // Bookings whose reservation date falls in [from, to]. For "נרשמו" the
+  // אר״י/חו״ל split comes from the BOOKING itself (גזירה שביעית), not the אש״ל.
+  const regularInRange = new Map<string, string>(); // personalCode → booking אר״י/חו״ל
+  const group23InRange = new Set<string>();
   for (const r of bookerRows) {
-    if (!weekKey || r.weekKey !== weekKey) continue;
+    const d = parseDmy(r.date);
+    if (!d || d < from || d > to) continue;
     if (!isLiveBooking(r, cancellations)) continue;
-    if (bookingGroup(r.raw) === ONE_TIME_GROUP) group23ThisWeek.add(r.personalCode);
-    else regularThisWeek.set(r.personalCode, bookingAriChul(r.raw));
+    if (bookingGroup(r.raw) === ONE_TIME_GROUP) group23InRange.add(r.personalCode);
+    else regularInRange.set(r.personalCode, bookingAriChul(r.raw));
   }
 
   const map = new Map<string, YeshivaDemand>();
@@ -158,19 +178,19 @@ export async function loadRoomDemand(
 
   for (const s of students) {
     const d = ensure(s.yeshiva);
-    const bookedAriChul = regularThisWeek.get(s.personalCode);
+    const bookedAriChul = regularInRange.get(s.personalCode);
     if (bookedAriChul !== undefined) {
-      // נרשמו — הזמין מיטה השבוע; אר״י/חו״ל לפי ההזמנה (לא לפי האש״ל).
+      // נרשמו — הזמין מיטה בטווח; אר״י/חו״ל לפי ההזמנה (לא לפי האש״ל).
       if (bookedAriChul === "ארי") d.ariReg++;
       else d.chulReg++; // "חול" או ריק → חו״ל
-    } else if (group23ThisWeek.has(s.personalCode)) {
-      d.oneTime++; // חד-פעמי — group 23 booking this week
+    } else if (group23InRange.has(s.personalCode)) {
+      d.oneTime++; // חד-פעמי — group 23 booking in range
     } else if (s.registeredEshel) {
-      // לא נרשמו — אש״ל, לא הזמין השבוע; אר״י/חו״ל לפי רישום האש״ל.
+      // לא נרשמו — אש״ל, לא הזמין בטווח; אר״י/חו״ל לפי רישום האש״ל.
       if (s.ariChul === "ארי") d.ariNotReg++;
       else d.chulNotReg++;
     }
-    // else: not אש״ל and no booking this week → not part of this week's demand
+    // else: not אש״ל and no booking in range → not part of this range's demand
   }
 
   // Order by the shared yeshiva ordering (drops ארכיון / לא-שובץ buckets).

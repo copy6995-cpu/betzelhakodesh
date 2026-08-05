@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatNum } from "@/lib/utils";
-import { weekKeyOf, currentWeekKey, weekLabel } from "@/lib/weeks";
+import {
+  weekKeyOf,
+  weekLabel,
+  sundayOf,
+  isoDate,
+  addDays,
+  parseISODate,
+} from "@/lib/weeks";
+import { RoomsDateRange } from "./date-range";
 import { parashaForWeek } from "@/lib/hebrew-calendar";
 import { getActiveYear } from "@/lib/year";
 import { loadRoomDemand, mergeRoomUnits, physicalCode } from "@/lib/rooms";
@@ -14,13 +22,31 @@ export const dynamic = "force-dynamic";
 export default async function RoomsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; from?: string; to?: string }>;
 }) {
   const sp = await searchParams;
-  // Snap to Sunday: if the user passed any date, we normalize it to the Sunday
-  // of that week so the URL always represents a week key.
-  const raw = sp.week?.trim();
-  const weekKey = raw ? weekKeyOf(new Date(raw)) : currentWeekKey();
+  // The demand table is driven by a reservation-date range (defaults to the
+  // current week: Sunday → today).
+  const today = new Date();
+  const from = sp.from?.trim() || isoDate(sundayOf(today));
+  const to = sp.to?.trim() || isoDate(today);
+  const fromDate = new Date(`${from}T00:00:00`);
+  const toDate = new Date(`${to}T23:59:59`);
+  // Allocation stays per single week — the week of `from` (or an explicit ?week=).
+  const weekKey = sp.week?.trim()
+    ? weekKeyOf(new Date(sp.week.trim()))
+    : weekKeyOf(fromDate);
+  const rangeLabel = (() => {
+    const fmt = (s: string) => {
+      const p = s.split("-");
+      return p.length === 3 ? `${p[2]}/${p[1]}` : s;
+    };
+    return `${fmt(from)} – ${fmt(to)} · ${from.slice(0, 4)}`;
+  })();
+  const weekEnd = (wk: string) => {
+    const d = parseISODate(wk);
+    return d ? isoDate(addDays(d, 6)) : wk;
+  };
 
   const activeYear = await getActiveYear();
 
@@ -41,7 +67,7 @@ export default async function RoomsPage({
       orderBy: { weekKey: "desc" },
       take: 8,
     }),
-    loadRoomDemand(activeYear, weekKey),
+    loadRoomDemand(activeYear, fromDate, toDate),
   ]);
 
   // Group rooms by building for display.
@@ -130,7 +156,7 @@ export default async function RoomsPage({
           {allWeeks.map((w) => (
             <Link
               key={w.weekKey}
-              href={`/rooms?week=${w.weekKey}`}
+              href={`/rooms?from=${w.weekKey}&to=${weekEnd(w.weekKey)}`}
               className={
                 "px-2 py-0.5 rounded border transition-colors " +
                 (w.weekKey === weekKey
@@ -145,12 +171,14 @@ export default async function RoomsPage({
         </div>
       )}
 
+      <RoomsDateRange from={from} to={to} />
+
       <RoomDemandSummary
         rows={demand.rows}
         totals={demand.totals}
         allocatedByYeshiva={allocatedByYeshiva}
         anyCapacity={anyCapacity}
-        weekLabel={weekLabel(weekKey)}
+        rangeLabel={rangeLabel}
       />
 
       <RoomAssignmentUI
