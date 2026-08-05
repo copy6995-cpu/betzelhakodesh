@@ -91,13 +91,16 @@ function bookingGroup(raw: string): string {
 }
 
 /**
- * Per-yeshiva demand, matching the office planning sheet: every student lands
- * in EXACTLY one bucket → אר״י/חו״ל × רשום/לא-רשום-לאש״ל, plus a separate
- * חד-פעמי bucket (a live Yemot booking in GROUP 23, the casual group). So each
- * yeshiva's סה״כ = its full head-count. Season-level figures, independent of
- * the week being allocated.
+ * Per-yeshiva room demand for ONE week (the week being allocated):
+ *  - נרשמו (אר״י/חו״ל): booked a bed this week in a regular group (not 23)
+ *  - לא נרשמו (אר״י/חו״ל): registered for אש״ל but did NOT book a bed this week
+ *  - חד-פעמי: booked a bed this week in GROUP 23 (the casual/one-time group)
+ * A student who neither booked this week nor is אש״ל-registered isn't counted.
  */
-export async function loadRoomDemand(activeYear: string): Promise<{
+export async function loadRoomDemand(
+  activeYear: string,
+  weekKey: string | null
+): Promise<{
   rows: YeshivaDemand[];
   totals: DemandTotals;
 }> {
@@ -118,17 +121,15 @@ export async function loadRoomDemand(activeYear: string): Promise<{
     loadCancellations(),
   ]);
 
-  // Distinct students with at least one live (non-cancelled) booking in the
-  // one-time group (23) — those are the "חד פעמי", not every bed booker.
-  const bookers = new Set(
-    bookerRows
-      .filter(
-        (r) =>
-          bookingGroup(r.raw) === ONE_TIME_GROUP &&
-          isLiveBooking(r, cancellations)
-      )
-      .map((r) => r.personalCode)
-  );
+  // Bed bookings for the SELECTED week only, split casual (group 23) vs regular.
+  const regularThisWeek = new Set<string>();
+  const group23ThisWeek = new Set<string>();
+  for (const r of bookerRows) {
+    if (!weekKey || r.weekKey !== weekKey) continue;
+    if (!isLiveBooking(r, cancellations)) continue;
+    if (bookingGroup(r.raw) === ONE_TIME_GROUP) group23ThisWeek.add(r.personalCode);
+    else regularThisWeek.add(r.personalCode);
+  }
 
   const map = new Map<string, YeshivaDemand>();
   const ensure = (y: string) => {
@@ -144,15 +145,18 @@ export async function loadRoomDemand(activeYear: string): Promise<{
     const d = ensure(s.yeshiva);
     // Unknown ari/chul falls to חו״ל so the head-count still lands somewhere.
     const isAri = s.ariChul === "ארי";
-    if (s.registeredEshel) {
+    if (regularThisWeek.has(s.personalCode)) {
+      // נרשמו — booked a (regular-group) bed this week.
       if (isAri) d.ariReg++;
       else d.chulReg++;
-    } else if (bookers.has(s.personalCode)) {
-      d.oneTime++; // חד-פעמי (group 23) — takes priority over "לא רשום"
-    } else {
+    } else if (group23ThisWeek.has(s.personalCode)) {
+      d.oneTime++; // חד-פעמי — group 23 booking this week
+    } else if (s.registeredEshel) {
+      // לא נרשמו — אש״ל subscriber who didn't book a bed this week.
       if (isAri) d.ariNotReg++;
       else d.chulNotReg++;
     }
+    // else: not אש״ל and no booking this week → not part of this week's demand
   }
 
   // Order by the shared yeshiva ordering (drops ארכיון / לא-שובץ buckets).

@@ -20,11 +20,13 @@ export function RoomDemandSummary({
   totals,
   allocatedByYeshiva,
   anyCapacity,
+  weekLabel,
 }: {
   rows: YeshivaDemand[];
   totals: DemandTotals;
   allocatedByYeshiva: Record<string, { rooms: number; beds: number }>;
   anyCapacity: boolean;
+  weekLabel?: string;
 }) {
   const n = (v: number) => (v ? v.toLocaleString("he-IL") : "");
   const totalRooms = Object.values(allocatedByYeshiva).reduce(
@@ -42,8 +44,14 @@ export function RoomDemandSummary({
 
   return (
     <div className="mb-4 bg-white rounded-xl card-shadow overflow-x-auto">
-      <div className="px-4 pt-3 pb-1 text-sm font-semibold text-[var(--color-primary)]">
-        ביקוש לפי ישיבה
+      <div className="px-4 pt-3 pb-2">
+        <div className="text-sm font-semibold text-[var(--color-primary)]">
+          ביקוש לפי ישיבה{weekLabel ? ` — ${weekLabel}` : ""}
+        </div>
+        <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+          נרשמו = הזמינו מיטה בימות המשיח השבוע · לא נרשמו = רשומים לאש״ל שלא
+          הזמינו השבוע · חד פעמי = קבוצה 23
+        </div>
       </div>
       <table className="w-full text-sm border-separate border-spacing-0">
         <thead>

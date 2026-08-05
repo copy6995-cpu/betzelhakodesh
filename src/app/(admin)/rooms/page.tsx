@@ -41,7 +41,7 @@ export default async function RoomsPage({
       orderBy: { weekKey: "desc" },
       take: 8,
     }),
-    loadRoomDemand(activeYear),
+    loadRoomDemand(activeYear, weekKey),
   ]);
 
   // Group rooms by building for display.
@@ -150,6 +150,7 @@ export default async function RoomsPage({
         totals={demand.totals}
         allocatedByYeshiva={allocatedByYeshiva}
         anyCapacity={anyCapacity}
+        weekLabel={weekLabel(weekKey)}
       />
 
       <RoomAssignmentUI
