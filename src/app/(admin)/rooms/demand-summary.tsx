@@ -1,10 +1,19 @@
-import type { YeshivaDemand } from "@/lib/rooms";
+import type { YeshivaDemand, DemandTotals } from "@/lib/rooms";
+
+type ColKey = "chulReg" | "chulNotReg" | "ariReg" | "ariNotReg" | "oneTime";
+const COLS: { key: ColKey; label: string; muted?: boolean }[] = [
+  { key: "chulReg", label: "חו״ל נרשמו" },
+  { key: "chulNotReg", label: "חו״ל לא נרשמו" },
+  { key: "ariReg", label: "אר״י נרשמו" },
+  { key: "ariNotReg", label: "אר״י לא נרשמו" },
+  { key: "oneTime", label: "חד פעמי", muted: true },
+];
 
 /**
- * Fixed per-yeshiva demand table pinned to the top of the allocation page.
- * Metrics are rows and yeshivot are columns so it stays short enough to stick.
- * "חדרים/מיטות שובצו" reflect the currently-selected week; the head-counts are
- * season totals (planning figures).
+ * Per-yeshiva demand table (rows = yeshivot), matching the office planning
+ * sheet: אר״י/חו״ל split by רשום/לא-רשום-לאש״ל, a חד-פעמי column (Yemot group
+ * 23), and a total. "לא משובץ"/ארכיון buckets are already dropped upstream.
+ * The last two columns show what's allocated in the currently-selected week.
  */
 export function RoomDemandSummary({
   rows,
@@ -13,7 +22,7 @@ export function RoomDemandSummary({
   anyCapacity,
 }: {
   rows: YeshivaDemand[];
-  totals: { ari: number; chul: number; oneTime: number; total: number };
+  totals: DemandTotals;
   allocatedByYeshiva: Record<string, { rooms: number; beds: number }>;
   anyCapacity: boolean;
 }) {
@@ -27,78 +36,93 @@ export function RoomDemandSummary({
     0
   );
 
-  const metric = [
-    { key: "ari", label: 'אר"י', get: (r: YeshivaDemand) => r.ari, tot: totals.ari, cls: "" },
-    { key: "chul", label: 'חו"ל', get: (r: YeshivaDemand) => r.chul, tot: totals.chul, cls: "" },
-    { key: "one", label: "חד פעמי", get: (r: YeshivaDemand) => r.oneTime, tot: totals.oneTime, cls: "text-[var(--color-muted-foreground)]" },
-    { key: "tot", label: "סה״כ נרשמים", get: (r: YeshivaDemand) => r.total, tot: totals.total, cls: "font-semibold" },
-  ] as const;
+  const headCell =
+    "py-2.5 px-3 text-center font-medium whitespace-nowrap";
+  const bodyCell = "py-2 px-3 text-center whitespace-nowrap";
 
   return (
-    <div className="sticky top-16 z-30 mb-4 bg-white rounded-xl card-shadow overflow-x-auto">
-      <table className="w-full text-xs border-separate border-spacing-0">
+    <div className="mb-4 bg-white rounded-xl card-shadow overflow-x-auto">
+      <div className="px-4 pt-3 pb-1 text-sm font-semibold text-[var(--color-primary)]">
+        ביקוש לפי ישיבה
+      </div>
+      <table className="w-full text-sm border-separate border-spacing-0">
         <thead>
-          <tr className="bg-[var(--color-primary)] text-white">
-            <th className="sticky right-0 z-10 bg-[var(--color-primary)] py-2 pe-3 ps-3 text-right whitespace-nowrap">
-              ביקוש לפי ישיבה
+          <tr className="bg-[var(--color-primary)] text-white text-xs">
+            <th className="py-2.5 pe-4 ps-3 text-right whitespace-nowrap">
+              ישיבה
             </th>
-            {rows.map((r) => (
-              <th
-                key={r.yeshiva}
-                className="py-2 px-2 text-center font-medium whitespace-nowrap min-w-[64px]"
-              >
-                {r.yeshiva}
+            {COLS.map((c) => (
+              <th key={c.key} className={headCell}>
+                {c.label}
               </th>
             ))}
-            <th className="py-2 px-3 text-center font-bold whitespace-nowrap bg-[var(--color-primary-hover)]">
+            <th className="py-2.5 px-3 text-center font-bold whitespace-nowrap bg-[var(--color-primary-hover)]">
               סה״כ
             </th>
+            <th className={headCell + " text-[var(--color-accent)]"}>
+              חדרים שובצו
+            </th>
+            {anyCapacity && (
+              <th className={headCell + " text-[var(--color-accent)]"}>
+                מיטות שובצו
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
-          {metric.map((m) => (
-            <tr key={m.key} className="[&>td]:border-t [&>td]:border-[var(--color-border)]/50">
-              <td className={"sticky right-0 z-10 bg-white py-1.5 pe-3 ps-3 text-right whitespace-nowrap " + m.cls}>
-                {m.label}
+          {rows.map((r) => (
+            <tr
+              key={r.yeshiva}
+              className="[&>td]:border-t [&>td]:border-[var(--color-border)]/50 hover:bg-[var(--color-muted)]/40"
+            >
+              <td className="py-2 pe-4 ps-3 text-right font-medium whitespace-nowrap">
+                {r.yeshiva}
               </td>
-              {rows.map((r) => (
-                <td key={r.yeshiva} className={"py-1.5 px-2 text-center " + m.cls}>
-                  {n(m.get(r))}
+              {COLS.map((c) => (
+                <td
+                  key={c.key}
+                  className={
+                    bodyCell +
+                    (c.muted ? " text-[var(--color-muted-foreground)]" : "")
+                  }
+                >
+                  {n(r[c.key])}
                 </td>
               ))}
-              <td className={"py-1.5 px-3 text-center bg-[var(--color-muted)] " + m.cls}>
-                {n(m.tot)}
+              <td className={bodyCell + " font-semibold bg-[var(--color-muted)]/50"}>
+                {n(r.total)}
               </td>
-            </tr>
-          ))}
-          <tr className="[&>td]:border-t-2 [&>td]:border-[var(--color-border)]">
-            <td className="sticky right-0 z-10 bg-white py-1.5 pe-3 ps-3 text-right whitespace-nowrap text-[var(--color-accent)]">
-              חדרים שובצו (השבוע)
-            </td>
-            {rows.map((r) => (
-              <td key={r.yeshiva} className="py-1.5 px-2 text-center text-[var(--color-accent)]">
+              <td className={bodyCell + " text-[var(--color-accent)]"}>
                 {n(allocatedByYeshiva[r.yeshiva]?.rooms ?? 0)}
               </td>
-            ))}
-            <td className="py-1.5 px-3 text-center bg-[var(--color-muted)] text-[var(--color-accent)]">
-              {n(totalRooms)}
-            </td>
-          </tr>
-          {anyCapacity && (
-            <tr className="[&>td]:border-t [&>td]:border-[var(--color-border)]/50">
-              <td className="sticky right-0 z-10 bg-white py-1.5 pe-3 ps-3 text-right whitespace-nowrap text-[var(--color-accent)]">
-                מיטות שובצו (השבוע)
-              </td>
-              {rows.map((r) => (
-                <td key={r.yeshiva} className="py-1.5 px-2 text-center text-[var(--color-accent)]">
+              {anyCapacity && (
+                <td className={bodyCell + " text-[var(--color-accent)]"}>
                   {n(allocatedByYeshiva[r.yeshiva]?.beds ?? 0)}
                 </td>
-              ))}
-              <td className="py-1.5 px-3 text-center bg-[var(--color-muted)] text-[var(--color-accent)]">
+              )}
+            </tr>
+          ))}
+          <tr className="[&>td]:border-t-2 [&>td]:border-[var(--color-primary)] bg-[var(--color-muted)] font-bold">
+            <td className="py-2.5 pe-4 ps-3 text-right whitespace-nowrap">
+              סה״כ
+            </td>
+            {COLS.map((c) => (
+              <td key={c.key} className={bodyCell}>
+                {n(totals[c.key])}
+              </td>
+            ))}
+            <td className={bodyCell + " bg-[var(--color-primary)] text-white"}>
+              {n(totals.total)}
+            </td>
+            <td className={bodyCell + " text-[var(--color-accent)]"}>
+              {n(totalRooms)}
+            </td>
+            {anyCapacity && (
+              <td className={bodyCell + " text-[var(--color-accent)]"}>
                 {n(totalBeds)}
               </td>
-            </tr>
-          )}
+            )}
+          </tr>
         </tbody>
       </table>
     </div>

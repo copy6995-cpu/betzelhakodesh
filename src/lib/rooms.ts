@@ -59,9 +59,20 @@ export function mergeRoomUnits(
 
 export type YeshivaDemand = {
   yeshiva: string;
-  ari: number; // registered for אש״ל, אר״י
-  chul: number; // registered for אש״ל, חו״ל
-  oneTime: number; // live Yemot booking in group 23 (חד-פעמי), not אש״ל
+  chulReg: number; // חו״ל, רשום לאש״ל
+  chulNotReg: number; // חו״ל, לא רשום לאש״ל (ולא חד-פעמי)
+  ariReg: number; // אר״י, רשום לאש״ל
+  ariNotReg: number; // אר״י, לא רשום לאש״ל
+  oneTime: number; // חד-פעמי — הזמנת מיטה חיה בקבוצה 23
+  total: number; // סך התלמידים בישיבה (סכום כל העמודות)
+};
+
+export type DemandTotals = {
+  chulReg: number;
+  chulNotReg: number;
+  ariReg: number;
+  ariNotReg: number;
+  oneTime: number;
   total: number;
 };
 
@@ -80,14 +91,15 @@ function bookingGroup(raw: string): string {
 }
 
 /**
- * Per-yeshiva demand: אש״ל subscribers split אר״י/חו״ל, plus one-time bed
- * bookers — students with a live Yemot reservation in GROUP 23 (the חד-פעמי /
- * casual group) who aren't אש״ל-registered. Season-level planning figures —
- * independent of which week you're allocating.
+ * Per-yeshiva demand, matching the office planning sheet: every student lands
+ * in EXACTLY one bucket → אר״י/חו״ל × רשום/לא-רשום-לאש״ל, plus a separate
+ * חד-פעמי bucket (a live Yemot booking in GROUP 23, the casual group). So each
+ * yeshiva's סה״כ = its full head-count. Season-level figures, independent of
+ * the week being allocated.
  */
 export async function loadRoomDemand(activeYear: string): Promise<{
   rows: YeshivaDemand[];
-  totals: { ari: number; chul: number; oneTime: number; total: number };
+  totals: DemandTotals;
 }> {
   const [students, bookerRows, cancellations] = await Promise.all([
     prisma.student.findMany({
@@ -122,7 +134,7 @@ export async function loadRoomDemand(activeYear: string): Promise<{
   const ensure = (y: string) => {
     let d = map.get(y);
     if (!d) {
-      d = { yeshiva: y, ari: 0, chul: 0, oneTime: 0, total: 0 };
+      d = { yeshiva: y, chulReg: 0, chulNotReg: 0, ariReg: 0, ariNotReg: 0, oneTime: 0, total: 0 };
       map.set(y, d);
     }
     return d;
@@ -130,12 +142,16 @@ export async function loadRoomDemand(activeYear: string): Promise<{
 
   for (const s of students) {
     const d = ensure(s.yeshiva);
+    // Unknown ari/chul falls to חו״ל so the head-count still lands somewhere.
+    const isAri = s.ariChul === "ארי";
     if (s.registeredEshel) {
-      if (s.ariChul === "ארי") d.ari++;
-      else if (s.ariChul === "חול") d.chul++;
-      else d.chul++; // unknown ari/chul falls to חו״ל so the head-count still lands
+      if (isAri) d.ariReg++;
+      else d.chulReg++;
     } else if (bookers.has(s.personalCode)) {
-      d.oneTime++;
+      d.oneTime++; // חד-פעמי (group 23) — takes priority over "לא רשום"
+    } else {
+      if (isAri) d.ariNotReg++;
+      else d.chulNotReg++;
     }
   }
 
@@ -143,17 +159,19 @@ export async function loadRoomDemand(activeYear: string): Promise<{
   const ordered = orderCalendarYeshivot([...map.keys()]);
   const rows = ordered.map((y) => {
     const d = map.get(y)!;
-    d.total = d.ari + d.chul + d.oneTime;
+    d.total = d.chulReg + d.chulNotReg + d.ariReg + d.ariNotReg + d.oneTime;
     return d;
   });
-  const totals = rows.reduce(
+  const totals = rows.reduce<DemandTotals>(
     (t, r) => ({
-      ari: t.ari + r.ari,
-      chul: t.chul + r.chul,
+      chulReg: t.chulReg + r.chulReg,
+      chulNotReg: t.chulNotReg + r.chulNotReg,
+      ariReg: t.ariReg + r.ariReg,
+      ariNotReg: t.ariNotReg + r.ariNotReg,
       oneTime: t.oneTime + r.oneTime,
       total: t.total + r.total,
     }),
-    { ari: 0, chul: 0, oneTime: 0, total: 0 }
+    { chulReg: 0, chulNotReg: 0, ariReg: 0, ariNotReg: 0, oneTime: 0, total: 0 }
   );
 
   return { rows, totals };
