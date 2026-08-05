@@ -12,17 +12,38 @@
 import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
 import { getActiveYear } from "./year";
+import { loadCancellations, isLiveBooking } from "./bed-cancellations";
 
 export type SubmissionRow = Record<string, string | number | null>;
 
-/** Parse "dd/mm/yyyy" (Yemot's format) into a JS Date. Null on failure. */
-function parseDmy(s: string | null | undefined): Date | null {
+/** Parse Yemot's "dd/mm/yyyy" date + optional "HH:MM[:SS]" time into a Date.
+ *  Null on failure. Parsed as server-local so it compares consistently with
+ *  the from/to datetimes the UI sends (both go through the same clock). */
+function parseDmy(s: string | null | undefined, time?: string | null): Date | null {
   if (!s) return null;
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s.trim());
   if (!m) return null;
   const [, dd, mm, yyyy] = m;
-  const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00Z`);
+  let HH = "00", MM = "00", SS = "00";
+  const tm = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec((time ?? "").trim());
+  if (tm) {
+    HH = tm[1].padStart(2, "0");
+    MM = tm[2];
+    SS = tm[3] ?? "00";
+  }
+  const d = new Date(`${yyyy}-${mm}-${dd}T${HH}:${MM}:${SS}`);
   return isNaN(d.getTime()) ? null : d;
+}
+
+/** Read the "שעה" (HH:MM:SS) time field out of a reservation's raw JSON. */
+function timeFromRaw(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    const v = (JSON.parse(raw) as Record<string, unknown>)["שעה"];
+    return v == null ? "" : String(v);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -83,16 +104,19 @@ export async function loadRegistrationsByYeshiva(opts: {
   totalRows: number;
 }> {
   const year = opts.year ?? (await getActiveYear());
-  const approved = await prisma.yemotBedReservation.findMany({
-    where: { status: "מאושר" },
-  });
+  const [approved, cancellations] = await Promise.all([
+    prisma.yemotBedReservation.findMany({ where: { status: "מאושר" } }),
+    loadCancellations(),
+  ]);
 
   const perCode = new Map<
     string,
     { date: Date; hebDate: string | null; weekKey: string; status: string; nameFromYemot: string | null }
   >();
   for (const r of approved) {
-    const d = parseDmy(r.date);
+    // Drop bookings the bachur later cancelled (שלוחה 5).
+    if (!isLiveBooking(r, cancellations)) continue;
+    const d = parseDmy(r.date, timeFromRaw(r.raw));
     if (!d) continue;
     if (d < opts.from || d > opts.to) continue;
     const prev = perCode.get(r.personalCode);
@@ -148,7 +172,7 @@ export async function loadRegistrationsByYeshiva(opts: {
       "שיעור": roster?.shiur ?? "",
       "ישיבה": roster?.yeshiva ?? "(לא ברשימה)",
       'חו"ל/אר"י': roster?.ariChul ?? "",
-      "תאריך הרשמה": y.date.toLocaleDateString("he-IL"),
+      "תאריך הרשמה": y.date.toLocaleString("he-IL"),
       "מצב": y.status,
       "שבוע": y.weekKey,
     };
@@ -267,6 +291,20 @@ export async function buildCombinedWorkbook(opts: {
   );
   const usedNames = new Set<string>();
   let idx = 1;
+
+  // First sheet: everyone together, across all yeshivot.
+  const allRows = sorted.flatMap(([, rows]) => rows);
+  if (allRows.length > 0) {
+    const allName = safeSheetName("כל הישיבות");
+    usedNames.add(allName);
+    addTableSheet(wb, {
+      sheetName: allName,
+      tableName: safeTableName("all", 0),
+      columns: opts.columns,
+      rows: allRows,
+    });
+  }
+
   for (const [yeshiva, rows] of sorted) {
     let sheetName = safeSheetName(yeshiva);
     let attempt = sheetName;

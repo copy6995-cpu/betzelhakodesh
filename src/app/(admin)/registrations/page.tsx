@@ -14,11 +14,18 @@ function startOfSunday(d: Date): Date {
   return x;
 }
 
-function iso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+function isoDT(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(
+    d.getHours()
+  )}:${p(d.getMinutes())}`;
+}
+
+/** Parse a UI value (date-only or datetime-local) into a Date. */
+function parseRange(s: string, endOfDay: boolean): Date {
+  return new Date(
+    s.includes("T") ? s : `${s}T${endOfDay ? "23:59:59" : "00:00:00"}`
+  );
 }
 
 export default async function RegistrationsPage({
@@ -28,15 +35,16 @@ export default async function RegistrationsPage({
 }) {
   const sp = await searchParams;
   const today = new Date();
-  const from = sp.from ?? iso(startOfSunday(today));
-  const to = sp.to ?? iso(today);
+  // Normalize to datetime-local format ("YYYY-MM-DDTHH:MM") for the inputs.
+  const norm = (s: string, end: string) =>
+    s.includes("T") ? s.slice(0, 16) : `${s}T${end}`;
+  const from = norm(sp.from ?? isoDT(startOfSunday(today)), "00:00");
+  const to = norm(sp.to ?? isoDT(today), "23:59");
   const year = await getActiveYear(sp.year);
 
-  const fromDate = new Date(from + "T00:00:00");
-  const toDate = new Date(to + "T23:59:59");
   const loaded = await loadRegistrationsByYeshiva({
-    from: fromDate,
-    to: toDate,
+    from: parseRange(from, false),
+    to: parseRange(to, true),
     year,
   });
   const counts = [...loaded.groups.entries()]

@@ -30,8 +30,11 @@ export async function GET(req: NextRequest) {
 
   if (!fromStr || !toStr) return new Response("Missing from/to", { status: 400 });
 
-  const from = new Date(fromStr + "T00:00:00");
-  const to = new Date(toStr + "T23:59:59");
+  // Accept both date-only and datetime-local (from the time picker) values.
+  const parseDT = (s: string, endOfDay: boolean) =>
+    new Date(s.includes("T") ? s : `${s}T${endOfDay ? "23:59:59" : "00:00:00"}`);
+  const from = parseDT(fromStr, false);
+  const to = parseDT(toStr, true);
   if (isNaN(from.getTime()) || isNaN(to.getTime())) {
     return new Response("Invalid dates", { status: 400 });
   }

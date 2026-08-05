@@ -32,41 +32,41 @@ export function RegistrationsUI({
   }
 
   const downloadCombined =
-    `/api/registrations/export?from=${from}&to=${to}` +
+    `/api/registrations/export?from=${encodeURIComponent(
+      from
+    )}&to=${encodeURIComponent(to)}` +
     (suffix ? `&suffix=${encodeURIComponent(suffix)}` : "");
 
   function downloadOne(yeshiva: string) {
     return downloadCombined + `&yeshiva=${encodeURIComponent(yeshiva)}`;
   }
 
-  const isoDate = (x: Date) =>
-    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(
-      x.getDate()
-    ).padStart(2, "0")}`;
+  const isoDT = (x: Date) => {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(
+      x.getHours()
+    )}:${p(x.getMinutes())}`;
+  };
+  const dayStart = (x: Date) => {
+    const d = new Date(x);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
 
   function setThisWeek() {
     const t = new Date();
-    const d = new Date(t);
+    const d = dayStart(t);
     d.setDate(d.getDate() - d.getDay()); // back to Sunday
-    d.setHours(0, 0, 0, 0);
-    setFrom(isoDate(d));
-    setTo(isoDate(t));
+    setFrom(isoDT(d));
+    setTo(isoDT(t));
   }
 
-  function setLast7Days() {
+  function setLastDays(n: number) {
     const t = new Date();
-    const d = new Date(t);
-    d.setDate(d.getDate() - 6);
-    setFrom(isoDate(d));
-    setTo(isoDate(t));
-  }
-
-  function setLast30Days() {
-    const t = new Date();
-    const d = new Date(t);
-    d.setDate(d.getDate() - 29);
-    setFrom(isoDate(d));
-    setTo(isoDate(t));
+    const d = dayStart(t);
+    d.setDate(d.getDate() - (n - 1));
+    setFrom(isoDT(d));
+    setTo(isoDT(t));
   }
 
   return (
@@ -81,7 +81,7 @@ export function RegistrationsUI({
               מתאריך
             </span>
             <input
-              type="date"
+              type="datetime-local"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
               className="mt-1 w-full h-10 rounded-lg border border-[var(--color-border)] px-3 text-sm"
@@ -92,7 +92,7 @@ export function RegistrationsUI({
               עד תאריך
             </span>
             <input
-              type="date"
+              type="datetime-local"
               value={to}
               onChange={(e) => setTo(e.target.value)}
               className="mt-1 w-full h-10 rounded-lg border border-[var(--color-border)] px-3 text-sm"
@@ -121,14 +121,14 @@ export function RegistrationsUI({
           </button>
           <button
             type="button"
-            onClick={setLast7Days}
+            onClick={() => setLastDays(7)}
             className="px-3 h-8 rounded-md border border-[var(--color-border)] text-xs hover:bg-[var(--color-muted)]"
           >
             7 ימים אחרונים
           </button>
           <button
             type="button"
-            onClick={setLast30Days}
+            onClick={() => setLastDays(30)}
             className="px-3 h-8 rounded-md border border-[var(--color-border)] text-xs hover:bg-[var(--color-muted)]"
           >
             30 ימים אחרונים
@@ -166,7 +166,8 @@ export function RegistrationsUI({
                 {totalRows.toLocaleString("he-IL")} רשומים בטווח
               </h2>
               <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
-                מיום {from} עד {to} · מקור: ימות המשיח (סטטוס &quot;מאושר&quot;)
+                מיום {from.replace("T", " ")} עד {to.replace("T", " ")} · מקור:
+                ימות המשיח (סטטוס &quot;מאושר&quot;)
               </p>
             </div>
             {totalRows > 0 && (
