@@ -261,10 +261,16 @@ export async function fetchLogCreditCard(opts: {
     convertType: "json",
     wath,
   })) as { responseStatus?: string; data?: YmgrRow[]; message?: string };
+  // Surface the real reason instead of silently returning [] — a non-OK
+  // status here (bad/expired token, missing permission on the shluchah, wrong
+  // path) otherwise shows up in the UI as a misleading "0 נשמרו".
   if (!o || o.responseStatus !== "OK") {
-    if (o?.responseStatus === "EXCEPTION" && o.message)
-      throw new Error(o.message);
-    return [];
+    throw new Error(
+      `ימות המשיח לא החזיר את קובץ הסליקות (${wath}): ` +
+        `${o?.responseStatus ?? "אין תגובה"}` +
+        `${o?.message ? " — " + o.message : ""}. ` +
+        `בדוק שהטוקן בהגדרות → ימות המשיח תקין ובעל הרשאה.`
+    );
   }
   return o.data ?? [];
 }
