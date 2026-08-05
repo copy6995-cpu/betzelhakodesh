@@ -49,8 +49,9 @@ export function RoomDemandSummary({
           ביקוש לפי ישיבה{weekLabel ? ` — ${weekLabel}` : ""}
         </div>
         <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
-          נרשמו = הזמינו מיטה בימות המשיח השבוע · לא נרשמו = רשומים לאש״ל שלא
-          הזמינו השבוע · חד פעמי = קבוצה 23
+          נרשמו = הזמינו מיטה בימות המשיח השבוע (אר״י/חו״ל לפי ההזמנה) · לא נרשמו
+          = רשומים לאש״ל שלא הזמינו השבוע · חד פעמי = קבוצה 23 · סה״כ = מי שהזמין
+          (נרשמו + חד פעמי)
         </div>
       </div>
       <table className="w-full text-sm border-separate border-spacing-0">
