@@ -16,7 +16,8 @@ import {
 } from "./eshel";
 
 export type BachurimExportRow = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   personalCode: string;
   fatherName: string;
   yeshiva: string;
@@ -34,7 +35,8 @@ export type BachurimExportRow = {
 };
 
 const COLUMNS: Array<{ header: string; key: keyof BachurimExportRow }> = [
-  { header: "שם משפחה", key: "fullName" },
+  { header: "שם הבחור", key: "firstName" },
+  { header: "משפחה", key: "lastName" },
   { header: "שם האב", key: "fatherName" },
   { header: "קוד אישי", key: "personalCode" },
   { header: "ישיבה", key: "yeshiva" },
@@ -220,7 +222,8 @@ export async function loadBachurimForExport(opts: {
     const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
     const price = s.price ?? 0;
     return {
-      fullName: `${s.lastName} ${s.firstName}`.trim(),
+      firstName: s.firstName,
+      lastName: s.lastName,
       personalCode: s.personalCode,
       fatherName: s.fatherName ?? "",
       yeshiva: s.yeshiva,
