@@ -4,7 +4,7 @@
  */
 import { prisma } from "./prisma";
 import { orderCalendarYeshivot } from "./calendar-export";
-import { loadCancellations, isLiveBooking } from "./bed-cancellations";
+import { loadCancellations } from "./bed-cancellations";
 
 /**
  * Some physical rooms are two catalog entries that must be assigned together
@@ -59,19 +59,23 @@ export function mergeRoomUnits(
 
 export type YeshivaDemand = {
   yeshiva: string;
-  chulReg: number; // חו״ל, רשום לאש״ל
-  chulNotReg: number; // חו״ל, לא רשום לאש״ל (ולא חד-פעמי)
-  ariReg: number; // אר״י, רשום לאש״ל
-  ariNotReg: number; // אר״י, לא רשום לאש״ל
-  oneTime: number; // חד-פעמי — הזמנת מיטה חיה בקבוצה 23
-  total: number; // סך התלמידים בישיבה (סכום כל העמודות)
+  chulReg: number; // חו״ל — הזמין מיטה בטווח (הפעולה האחרונה = הזמנה)
+  chulNotReg: number; // חו״ל — רשום לאש״ל ולא הזמין בטווח
+  chulCancel: number; // חו״ל — הפעולה האחרונה = ביטול מיטה
+  ariReg: number; // אר״י — הזמין מיטה בטווח
+  ariNotReg: number; // אר״י — רשום לאש״ל ולא הזמין בטווח
+  ariCancel: number; // אר״י — הפעולה האחרונה = ביטול מיטה
+  oneTime: number; // חד-פעמי — הזמנת מיטה בקבוצה 23 (הפעולה האחרונה)
+  total: number; // נרשמו + חד-פעמי (מי שיש לו הזמנה חיה)
 };
 
 export type DemandTotals = {
   chulReg: number;
   chulNotReg: number;
+  chulCancel: number;
   ariReg: number;
   ariNotReg: number;
+  ariCancel: number;
   oneTime: number;
   total: number;
 };
@@ -101,27 +105,47 @@ function bookingAriChul(raw: string): string {
   }
 }
 
-/** Parse Yemot's "dd/mm/yyyy" reservation date into a Date. Null on failure. */
-function parseDmy(s: string | null | undefined): Date | null {
+/** Parse Yemot's "dd/mm/yyyy" date + optional "HH:MM[:SS]" time into a Date.
+ *  The time lets us order a person's booking/cancel events ("last one wins"). */
+function parseDmy(s: string | null | undefined, time?: string | null): Date | null {
   if (!s) return null;
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s.trim());
   if (!m) return null;
   const [, dd, mm, yyyy] = m;
-  const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  let HH = "00", MM = "00", SS = "00";
+  const tm = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec((time ?? "").trim());
+  if (tm) {
+    HH = tm[1].padStart(2, "0");
+    MM = tm[2];
+    SS = tm[3] ?? "00";
+  }
+  const d = new Date(`${yyyy}-${mm}-${dd}T${HH}:${MM}:${SS}`);
   return isNaN(d.getTime()) ? null : d;
 }
 
+/** Read the "שעה" (HH:MM:SS) time field out of a reservation's raw JSON. */
+function timeFromRaw(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    const v = (JSON.parse(raw) as Record<string, unknown>)["שעה"];
+    return v == null ? "" : String(v);
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Per-yeshiva room demand for a DATE RANGE (by the Yemot reservation date):
- *  - נרשמו (אר״י/חו״ל): booked a bed in the range in a regular group (not 23) —
- *    the אר״י/חו״ל split comes from the BOOKING (גזירה שביעית), not the אש״ל form
- *  - לא נרשמו (אר״י/חו״ל): registered for אש״ל but did NOT book in the range
- *    (split here is the אש״ל registration's אר״י/חו״ל)
- *  - חד-פעמי: booked a bed in the range in GROUP 23 (the casual/one-time group)
- * סה״כ = נרשמו + חד-פעמי (only those who actually booked). A student who
- * neither booked in the range nor is אש״ל-registered isn't counted.
- * (The reservation weekKey is "YYYY-WW" while allocation weeks are "YYYY-MM-DD",
- * so we filter on the reservation date, never on weekKey equality.)
+ * Per-yeshiva room demand for a DATE RANGE (by the Yemot reservation date).
+ * Each student's status is decided by their LAST booking/cancel action in the
+ * range ("האחרון קובע": booked → cancelled → booked again = registered):
+ *  - נרשמו (אר״י/חו״ל): last action is a regular-group booking (אר״י/חו״ל from
+ *    the BOOKING's גזירה שביעית, not the אש״ל form)
+ *  - חד-פעמי: last action is a GROUP 23 booking (the casual/one-time group)
+ *  - ביטולים (אר״י/חו״ל): last action is a cancellation (שלוחה 5)
+ *  - לא נרשמו (אר״י/חו״ל): registered for אש״ל but no booking/cancel in the range
+ * סה״כ = נרשמו + חד-פעמי (a live booking). ביטולים / לא נרשמו aren't in the total.
+ * (Reservation weekKey is "YYYY-WW" while allocation weeks are "YYYY-MM-DD", so
+ * we filter on the reservation date, never on weekKey equality.)
  */
 export async function loadRoomDemand(
   activeYear: string,
@@ -154,23 +178,35 @@ export async function loadRoomDemand(
     loadCancellations(),
   ]);
 
-  // Bookings whose reservation date falls in [from, to]. For "נרשמו" the
-  // אר״י/חו״ל split comes from the BOOKING itself (גזירה שביעית), not the אש״ל.
-  const regularInRange = new Map<string, string>(); // personalCode → booking אר״י/חו״ל
-  const group23InRange = new Set<string>();
+  // Per person, in [from, to]: the LATEST booking (with its אר״י/חו״ל + group)
+  // and the LATEST cancellation, by full timestamp (date + שעה). Cancellation
+  // rows are the ones whose source is a cancellation path (שלוחה 5).
+  const cancelPaths = cancellations.paths;
+  type Latest = { bookTs: number; ariChul: string; group: string; cancelTs: number };
+  const perPerson = new Map<string, Latest>();
   for (const r of bookerRows) {
-    const d = parseDmy(r.date);
+    const d = parseDmy(r.date, timeFromRaw(r.raw));
     if (!d || d < from || d > to) continue;
-    if (!isLiveBooking(r, cancellations)) continue;
-    if (bookingGroup(r.raw) === ONE_TIME_GROUP) group23InRange.add(r.personalCode);
-    else regularInRange.set(r.personalCode, bookingAriChul(r.raw));
+    const ts = d.getTime();
+    let p = perPerson.get(r.personalCode);
+    if (!p) {
+      p = { bookTs: -1, ariChul: "", group: "", cancelTs: -1 };
+      perPerson.set(r.personalCode, p);
+    }
+    if (cancelPaths.has(r.source)) {
+      if (ts > p.cancelTs) p.cancelTs = ts;
+    } else if (ts > p.bookTs) {
+      p.bookTs = ts;
+      p.ariChul = bookingAriChul(r.raw);
+      p.group = bookingGroup(r.raw);
+    }
   }
 
   const map = new Map<string, YeshivaDemand>();
   const ensure = (y: string) => {
     let d = map.get(y);
     if (!d) {
-      d = { yeshiva: y, chulReg: 0, chulNotReg: 0, ariReg: 0, ariNotReg: 0, oneTime: 0, total: 0 };
+      d = { yeshiva: y, chulReg: 0, chulNotReg: 0, chulCancel: 0, ariReg: 0, ariNotReg: 0, ariCancel: 0, oneTime: 0, total: 0 };
       map.set(y, d);
     }
     return d;
@@ -178,19 +214,23 @@ export async function loadRoomDemand(
 
   for (const s of students) {
     const d = ensure(s.yeshiva);
-    const bookedAriChul = regularInRange.get(s.personalCode);
-    if (bookedAriChul !== undefined) {
-      // נרשמו — הזמין מיטה בטווח; אר״י/חו״ל לפי ההזמנה (לא לפי האש״ל).
-      if (bookedAriChul === "ארי") d.ariReg++;
-      else d.chulReg++; // "חול" או ריק → חו״ל
-    } else if (group23InRange.has(s.personalCode)) {
-      d.oneTime++; // חד-פעמי — group 23 booking in range
+    const p = perPerson.get(s.personalCode);
+    if (p && p.bookTs >= 0 && p.bookTs >= p.cancelTs) {
+      // נרשמו — הפעולה האחרונה היא הזמנה; אר״י/חו״ל לפי ההזמנה.
+      if (p.group === ONE_TIME_GROUP) d.oneTime++;
+      else if (p.ariChul === "ארי") d.ariReg++;
+      else d.chulReg++;
+    } else if (p && p.cancelTs >= 0) {
+      // ביטול — הפעולה האחרונה היא ביטול; אר״י/חו״ל לפי ההזמנה שבוטלה (או האש״ל).
+      const isAri = p.bookTs >= 0 ? p.ariChul === "ארי" : s.ariChul === "ארי";
+      if (isAri) d.ariCancel++;
+      else d.chulCancel++;
     } else if (s.registeredEshel) {
-      // לא נרשמו — אש״ל, לא הזמין בטווח; אר״י/חו״ל לפי רישום האש״ל.
+      // לא נרשמו — אש״ל, בלי הזמנה/ביטול בטווח; אר״י/חו״ל לפי רישום האש״ל.
       if (s.ariChul === "ארי") d.ariNotReg++;
       else d.chulNotReg++;
     }
-    // else: not אש״ל and no booking in range → not part of this range's demand
+    // else: not אש״ל and no activity in range → not part of this range's demand
   }
 
   // Order by the shared yeshiva ordering (drops ארכיון / לא-שובץ buckets).
@@ -206,12 +246,23 @@ export async function loadRoomDemand(
     (t, r) => ({
       chulReg: t.chulReg + r.chulReg,
       chulNotReg: t.chulNotReg + r.chulNotReg,
+      chulCancel: t.chulCancel + r.chulCancel,
       ariReg: t.ariReg + r.ariReg,
       ariNotReg: t.ariNotReg + r.ariNotReg,
+      ariCancel: t.ariCancel + r.ariCancel,
       oneTime: t.oneTime + r.oneTime,
       total: t.total + r.total,
     }),
-    { chulReg: 0, chulNotReg: 0, ariReg: 0, ariNotReg: 0, oneTime: 0, total: 0 }
+    {
+      chulReg: 0,
+      chulNotReg: 0,
+      chulCancel: 0,
+      ariReg: 0,
+      ariNotReg: 0,
+      ariCancel: 0,
+      oneTime: 0,
+      total: 0,
+    }
   );
 
   return { rows, totals };

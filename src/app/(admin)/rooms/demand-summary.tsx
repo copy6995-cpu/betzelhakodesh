@@ -1,11 +1,20 @@
 import type { YeshivaDemand, DemandTotals } from "@/lib/rooms";
 
-type ColKey = "chulReg" | "chulNotReg" | "ariReg" | "ariNotReg" | "oneTime";
-const COLS: { key: ColKey; label: string; muted?: boolean }[] = [
+type ColKey =
+  | "chulReg"
+  | "chulNotReg"
+  | "chulCancel"
+  | "ariReg"
+  | "ariNotReg"
+  | "ariCancel"
+  | "oneTime";
+const COLS: { key: ColKey; label: string; muted?: boolean; cancel?: boolean }[] = [
   { key: "chulReg", label: "חו״ל נרשמו" },
   { key: "chulNotReg", label: "חו״ל לא נרשמו" },
+  { key: "chulCancel", label: "חו״ל ביטול", cancel: true },
   { key: "ariReg", label: "אר״י נרשמו" },
   { key: "ariNotReg", label: "אר״י לא נרשמו" },
+  { key: "ariCancel", label: "אר״י ביטול", cancel: true },
   { key: "oneTime", label: "חד פעמי", muted: true },
 ];
 
@@ -49,9 +58,9 @@ export function RoomDemandSummary({
           ביקוש לפי ישיבה{rangeLabel ? ` — ${rangeLabel}` : ""}
         </div>
         <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
-          נרשמו = הזמינו מיטה בימות המשיח בטווח (אר״י/חו״ל לפי ההזמנה) · לא נרשמו
-          = רשומים לאש״ל שלא הזמינו בטווח · חד פעמי = קבוצה 23 · סה״כ = מי שהזמין
-          (נרשמו + חד פעמי)
+          לפי הפעולה האחרונה בטווח (נרשם→ביטל→נרשם = רשום) · נרשמו = הזמינו מיטה
+          (אר״י/חו״ל לפי ההזמנה) · לא נרשמו = רשומים לאש״ל שלא הזמינו · ביטול =
+          הפעולה האחרונה ביטול · חד פעמי = קבוצה 23 · סה״כ = נרשמו + חד פעמי
         </div>
       </div>
       <table className="w-full text-sm border-separate border-spacing-0">
@@ -92,7 +101,11 @@ export function RoomDemandSummary({
                   key={c.key}
                   className={
                     bodyCell +
-                    (c.muted ? " text-[var(--color-muted-foreground)]" : "")
+                    (c.muted
+                      ? " text-[var(--color-muted-foreground)]"
+                      : c.cancel
+                      ? " text-red-600"
+                      : "")
                   }
                 >
                   {n(r[c.key])}
