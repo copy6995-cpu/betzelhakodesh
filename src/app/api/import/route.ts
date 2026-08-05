@@ -33,7 +33,11 @@ export async function POST(req: NextRequest) {
   if (typeof year !== "string" || !year.trim()) {
     return NextResponse.json({ error: "חסר שם שנה" }, { status: 400 });
   }
-  if (mode !== "replace-year" && mode !== "skip-if-any-exist") {
+  if (
+    mode !== "replace-year" &&
+    mode !== "skip-if-any-exist" &&
+    mode !== "update-existing"
+  ) {
     return NextResponse.json({ error: `mode לא תקין: ${mode}` }, { status: 400 });
   }
 

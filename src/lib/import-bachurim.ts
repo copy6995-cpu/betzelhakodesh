@@ -147,7 +147,24 @@ function normalizeCode(raw: unknown, seen: Set<string>): string {
   throw new Error("Unable to generate a unique 6-digit code");
 }
 
-export type ImportMode = "skip-if-any-exist" | "replace-year";
+/** Deterministic 6-digit form of a code, for MATCHING existing students (no
+ *  side effects, no random fallback). Returns null when the value can't be a
+ *  real code. */
+function codeForMatch(raw: unknown): string | null {
+  const n = asInt(raw);
+  if (n !== null && n > 0) {
+    const s = String(n);
+    if (s.length === 6) return s;
+    if (s.length < 6) return s.padStart(6, "0");
+  }
+  return null;
+}
+
+function nameKey(first: string, last: string, father: string): string {
+  return `${normalizeName(first)}|${normalizeName(last)}|${normalizeName(father)}`;
+}
+
+export type ImportMode = "skip-if-any-exist" | "replace-year" | "update-existing";
 
 export type ImportResult = {
   year: string;
@@ -156,6 +173,7 @@ export type ImportResult = {
   studentsDeleted: number;
   parentsCreated: number;
   studentsCreated: number;
+  studentsUpdated: number;
   paymentsCreated: number;
   rowsSkipped: number;
   detectedColumns: Record<string, number>;
@@ -168,6 +186,10 @@ export type ImportResult = {
  *   Used by the Docker-entrypoint seed.
  * - mode="replace-year": wipes Student+Payment rows for the given year first,
  *   then imports. Parent rows persist (they outlive years).
+ * - mode="update-existing": matches each row to an existing student (by 6-digit
+ *   personal code, else a unique name) and updates only the fields the file
+ *   provides. Never deletes; leaves payments/beds/room allocations untouched.
+ *   Rows with no match are created as new students.
  *
  * Column layout is detected from the header row — both the legacy format
  * (with prices/payments) and the newer "רשימה סופית" format (roster only)
@@ -215,6 +237,7 @@ export async function importBachurimFromBuffer(
         studentsDeleted: 0,
         parentsCreated: 0,
         studentsCreated: 0,
+        studentsUpdated: 0,
         paymentsCreated: 0,
         rowsSkipped: 0,
         detectedColumns: columns as Record<string, number>,
@@ -238,8 +261,54 @@ export async function importBachurimFromBuffer(
   const parentKeyToId = new Map<string, string>();
   let parentsCreated = 0;
   let studentsCreated = 0;
+  let studentsUpdated = 0;
   let paymentsCreated = 0;
   let rowsSkipped = 0;
+
+  // For update-existing: index the year's current students so each row can be
+  // matched to one. A name that maps to more than one student is stored as
+  // null (ambiguous) so we never update the wrong record. Parent contact is
+  // preloaded so the per-row update needs no extra query.
+  type ExistingHit = {
+    id: string;
+    parentId: string;
+    parent: {
+      phone: string | null;
+      homePhone: string | null;
+      motherPhone: string | null;
+      email: string | null;
+    };
+  };
+  const existingByCode = new Map<string, ExistingHit>();
+  const existingByName = new Map<string, ExistingHit | null>();
+  if (mode === "update-existing") {
+    const current = await prisma.student.findMany({
+      where: { year },
+      select: {
+        id: true,
+        personalCode: true,
+        firstName: true,
+        lastName: true,
+        fatherName: true,
+        parentId: true,
+        parent: {
+          select: {
+            phone: true,
+            homePhone: true,
+            motherPhone: true,
+            email: true,
+          },
+        },
+      },
+    });
+    for (const s of current) {
+      codesSeen.add(s.personalCode); // don't hand a new row an in-use code
+      const hit: ExistingHit = { id: s.id, parentId: s.parentId, parent: s.parent };
+      existingByCode.set(s.personalCode, hit);
+      const nk = nameKey(s.firstName, s.lastName, s.fatherName);
+      existingByName.set(nk, existingByName.has(nk) ? null : hit);
+    }
+  }
 
   function get(row: unknown[], field: Field): unknown {
     const idx = columns[field];
@@ -263,11 +332,87 @@ export async function importBachurimFromBuffer(
 
     const fatherName = asString(get(row, "fatherName")) ?? "";
     const city = asString(get(row, "city"));
-    const yeshiva = asString(get(row, "yeshiva")) ?? "שיעור א' - לא שובץ";
+    const yeshivaRaw = asString(get(row, "yeshiva"));
+    const yeshiva = yeshivaRaw ?? "שיעור א' - לא שובץ";
     const phone = asString(get(row, "phone"));
     const homePhone = asString(get(row, "homePhone"));
     const motherPhone = asString(get(row, "motherPhone"));
     const email = asString(get(row, "email"));
+
+    // update-existing: find the matching student and update just the fields the
+    // file provides — never touching payments, beds or room allocations. Fall
+    // through to the create path only when there is no match.
+    if (mode === "update-existing") {
+      const codeMatch = codeForMatch(get(row, "personalCode"));
+      let hit = codeMatch ? existingByCode.get(codeMatch) : undefined;
+      if (!hit) hit = existingByName.get(nameKey(firstName, lastName, fatherName)) ?? undefined;
+
+      if (hit) {
+        const data: {
+          firstName?: string;
+          lastName?: string;
+          fatherName?: string;
+          city?: string;
+          yeshiva?: string;
+          shiur?: string;
+          ariChul?: string;
+          branch?: string;
+          yeshivaCode?: string;
+          price?: number;
+          paymentMethod?: string;
+          paymentsCount?: number;
+          nedarimHook?: string;
+          endDateLabel?: string;
+          endDate?: Date;
+          registeredEshel?: boolean;
+          notes?: string;
+        } = { firstName, lastName };
+        if (fatherName) data.fatherName = fatherName;
+        if (city) data.city = city;
+        if (yeshivaRaw) data.yeshiva = yeshivaRaw;
+        const shiur = asString(get(row, "shiur"));
+        if (shiur) data.shiur = shiur;
+        const ariChul = asString(get(row, "ariChul"));
+        if (ariChul) data.ariChul = ariChul;
+        const branch = asString(get(row, "branch"));
+        if (branch) data.branch = branch;
+        const yeshivaCode = asString(get(row, "yeshivaCode"));
+        if (yeshivaCode) data.yeshivaCode = yeshivaCode;
+        const price = asInt(get(row, "price"));
+        if (price !== null) data.price = price;
+        const paymentMethod = asString(get(row, "paymentMethod"));
+        if (paymentMethod) data.paymentMethod = paymentMethod;
+        const paymentsCount = asInt(get(row, "paymentsCount"));
+        if (paymentsCount !== null) data.paymentsCount = paymentsCount;
+        const nedarimHook = asString(get(row, "nedarimHook"));
+        if (nedarimHook) data.nedarimHook = nedarimHook;
+        const endRaw = get(row, "endDate");
+        const endLabel = asString(endRaw);
+        if (endLabel) data.endDateLabel = endLabel;
+        const endDate = asDate(endRaw);
+        if (endDate) data.endDate = endDate;
+        const eshel = asBool(get(row, "registeredEshel"));
+        if (eshel !== null) data.registeredEshel = eshel;
+        const notes = asString(get(row, "notes"));
+        if (notes) data.notes = notes;
+
+        await prisma.student.update({ where: { id: hit.id }, data });
+        studentsUpdated++;
+
+        // Fill in any parent contact the file has that the DB is missing
+        // (using the preloaded snapshot — no extra read).
+        const p = hit.parent;
+        const pu: Record<string, string> = {};
+        if (!p.phone && phone) pu.phone = phone;
+        if (!p.homePhone && homePhone) pu.homePhone = homePhone;
+        if (!p.motherPhone && motherPhone) pu.motherPhone = motherPhone;
+        if (!p.email && email) pu.email = email;
+        if (Object.keys(pu).length > 0)
+          await prisma.parent.update({ where: { id: hit.parentId }, data: pu });
+        continue;
+      }
+      // no match → fall through and create as a new student
+    }
 
     // Parent bucketing — same normalized father+family collapses to one row.
     const normFather = normalizeName(fatherName);
@@ -390,6 +535,7 @@ export async function importBachurimFromBuffer(
     studentsDeleted,
     parentsCreated,
     studentsCreated,
+    studentsUpdated,
     paymentsCreated,
     rowsSkipped,
     detectedColumns: columns as Record<string, number>,

@@ -11,9 +11,12 @@ type Result = {
   studentsDeleted: number;
   parentsCreated: number;
   studentsCreated: number;
+  studentsUpdated: number;
   paymentsCreated: number;
   rowsSkipped: number;
 };
+
+type Mode = "update-existing" | "replace-year" | "skip-if-any-exist";
 
 export function ImportForm({
   activeYear,
@@ -25,9 +28,7 @@ export function ImportForm({
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [year, setYear] = useState(activeYear);
-  const [mode, setMode] = useState<"replace-year" | "skip-if-any-exist">(
-    "replace-year"
-  );
+  const [mode, setMode] = useState<Mode>("update-existing");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -89,6 +90,9 @@ export function ImportForm({
               <li>תלמידים שנמחקו (החלפה): {formatNum(result.studentsDeleted)}</li>
             )}
             <li>הורים חדשים: <b>{formatNum(result.parentsCreated)}</b></li>
+            {result.studentsUpdated > 0 && (
+              <li>תלמידים שעודכנו: <b>{formatNum(result.studentsUpdated)}</b></li>
+            )}
             <li>תלמידים חדשים: <b>{formatNum(result.studentsCreated)}</b></li>
             <li>תשלומים שנוצרו: <b>{formatNum(result.paymentsCreated)}</b></li>
             <li>שורות שדולגו (ריקות/חסרות שם): {formatNum(result.rowsSkipped)}</li>
@@ -136,6 +140,25 @@ export function ImportForm({
           אופן הייבוא
         </legend>
         <div className="space-y-2">
+          <label className="flex gap-3 items-start cursor-pointer">
+            <input
+              type="radio"
+              name="mode"
+              value="update-existing"
+              checked={mode === "update-existing"}
+              onChange={() => setMode("update-existing")}
+              className="mt-1"
+            />
+            <span>
+              <b>עדכון בלבד (מומלץ)</b>
+              <div className="text-xs text-[var(--color-muted-foreground)]">
+                מתאים כל שורה לתלמיד קיים (לפי קוד אישי, ואם אין — לפי שם ייחודי)
+                ומעדכן רק את השדות שבקובץ. <b>לא מוחק</b> תשלומים, מיטות או חדרים.
+                שורות ללא התאמה ייווצרו כתלמידים חדשים. שדה שריק בקובץ לא ידרוס
+                ערך קיים.
+              </div>
+            </span>
+          </label>
           <label className="flex gap-3 items-start cursor-pointer">
             <input
               type="radio"
