@@ -61,14 +61,29 @@ export type YeshivaDemand = {
   yeshiva: string;
   ari: number; // registered for אש״ל, אר״י
   chul: number; // registered for אש״ל, חו״ל
-  oneTime: number; // booked a bed but not registered for אש״ל
+  oneTime: number; // live Yemot booking in group 23 (חד-פעמי), not אש״ל
   total: number;
 };
 
+/** One-time (חד-פעמי) bookers register in Yemot GROUP 23 (CutList8 = "23") —
+ *  the casual/one-time group. Only that group counts toward "חד פעמי". */
+const ONE_TIME_GROUP = "23";
+
+/** A booking's group (CutList8) from its raw JSON. */
+function bookingGroup(raw: string): string {
+  try {
+    const g = (JSON.parse(raw) as { CutList8?: unknown }).CutList8;
+    return g == null ? "" : String(g).trim();
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Per-yeshiva demand: אש״ל subscribers split אר״י/חו״ל, plus one-time bed
- * bookers (approved Yemot reservation, not registered for אש״ל). Season-level
- * planning figures — independent of which week you're allocating.
+ * bookers — students with a live Yemot reservation in GROUP 23 (the חד-פעמי /
+ * casual group) who aren't אש״ל-registered. Season-level planning figures —
+ * independent of which week you're allocating.
  */
 export async function loadRoomDemand(activeYear: string): Promise<{
   rows: YeshivaDemand[];
@@ -86,15 +101,20 @@ export async function loadRoomDemand(activeYear: string): Promise<{
     }),
     prisma.yemotBedReservation.findMany({
       where: { status: "מאושר" },
-      select: { personalCode: true, weekKey: true, source: true },
+      select: { personalCode: true, weekKey: true, source: true, raw: true },
     }),
     loadCancellations(),
   ]);
 
-  // Distinct students with at least one live (non-cancelled) booking.
+  // Distinct students with at least one live (non-cancelled) booking in the
+  // one-time group (23) — those are the "חד פעמי", not every bed booker.
   const bookers = new Set(
     bookerRows
-      .filter((r) => isLiveBooking(r, cancellations))
+      .filter(
+        (r) =>
+          bookingGroup(r.raw) === ONE_TIME_GROUP &&
+          isLiveBooking(r, cancellations)
+      )
       .map((r) => r.personalCode)
   );
 
