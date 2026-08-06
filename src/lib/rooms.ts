@@ -216,14 +216,14 @@ export async function loadRoomDemand(
     const d = ensure(s.yeshiva);
     const p = perPerson.get(s.personalCode);
     if (p && p.bookTs >= 0 && p.bookTs >= p.cancelTs) {
-      // נרשמו — הפעולה האחרונה היא הזמנה; אר״י/חו״ל לפי ההזמנה.
+      // נרשמו — הפעולה האחרונה היא הזמנה; אר״י/חו״ל לפי ההזמנה, ואם חסר
+      // (למשל רישום ידני) — לפי האש״ל של התלמיד.
       if (p.group === ONE_TIME_GROUP) d.oneTime++;
-      else if (p.ariChul === "ארי") d.ariReg++;
+      else if ((p.ariChul || s.ariChul) === "ארי") d.ariReg++;
       else d.chulReg++;
     } else if (p && p.cancelTs >= 0) {
       // ביטול — הפעולה האחרונה היא ביטול; אר״י/חו״ל לפי ההזמנה שבוטלה (או האש״ל).
-      const isAri = p.bookTs >= 0 ? p.ariChul === "ארי" : s.ariChul === "ארי";
-      if (isAri) d.ariCancel++;
+      if ((p.ariChul || s.ariChul) === "ארי") d.ariCancel++;
       else d.chulCancel++;
     } else if (s.registeredEshel) {
       // לא נרשמו — אש״ל, בלי הזמנה/ביטול בטווח; אר״י/חו״ל לפי רישום האש״ל.
