@@ -131,10 +131,11 @@ export async function buildRoomsPdfHtml(opts: {
   * { box-sizing: border-box; }
   body { font-family: Arial, "Segoe UI", sans-serif; margin: 0; color: #1a1a1a; }
   @page { size: A4; margin: 1.2cm; }
-  .yeshiva { page-break-before: always; }
-  .yeshiva:first-of-type { page-break-before: avoid; }
+  /* Flow the yeshivot one after another (not a page each) — but keep each
+     yeshiva intact rather than splitting it across a page break. */
+  .yeshiva { break-inside: avoid; margin-bottom: 16px; }
   .y-head { display: flex; align-items: baseline; justify-content: space-between;
-            border-bottom: 2px solid #0f2942; padding-bottom: 4px; margin: 0 0 10px; }
+            border-bottom: 2px solid #0f2942; padding-bottom: 4px; margin: 0 0 8px; }
   h2 { color: #0f2942; font-size: 20px; margin: 0; }
   .muted { color: #6b7280; font-size: 12px; }
   .wing { margin-bottom: 10px; break-inside: avoid; }
