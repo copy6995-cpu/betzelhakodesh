@@ -52,7 +52,7 @@ export function RoomDemandSummary({
   const bodyCell = "py-2 px-3 text-center whitespace-nowrap";
 
   return (
-    <div className="mb-4 bg-white rounded-xl card-shadow overflow-x-auto">
+    <div className="sticky top-16 z-30 mb-4 bg-white rounded-xl card-shadow overflow-auto max-h-[75vh]">
       <div className="px-4 pt-3 pb-2">
         <div className="text-sm font-semibold text-[var(--color-primary)]">
           ביקוש לפי ישיבה{rangeLabel ? ` — ${rangeLabel}` : ""}
