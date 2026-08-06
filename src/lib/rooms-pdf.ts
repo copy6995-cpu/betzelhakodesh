@@ -104,7 +104,7 @@ export async function buildRoomsPdfHtml(opts: {
           const chips = units
             .map(
               (u) =>
-                `<span class="chip">${esc(u.code)}${
+                `<span class="chip"><bdi>${esc(u.code)}</bdi>${
                   anyCapacity && u.capacity != null
                     ? `<small>${u.capacity}</small>`
                     : ""
@@ -141,9 +141,12 @@ export async function buildRoomsPdfHtml(opts: {
   .wing { margin-bottom: 10px; break-inside: avoid; }
   .wing-h { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .chip { border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 8px;
+  /* inline-flex + direction:rtl fixes the order deterministically so the bed
+     count never bidi-merges with the room number. Reads: letter, room #, beds. */
+  .chip { display: inline-flex; align-items: baseline; gap: 5px; direction: rtl;
+          border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 8px;
           font-family: "Courier New", monospace; font-size: 13px; }
-  .chip small { color: #6b7280; margin-inline-start: 4px; font-size: 10px; }
+  .chip small { color: #6b7280; font-size: 10px; }
   h1.title { font-size: 15px; color: #6b7280; font-weight: 600; margin: 0 0 12px; }
 </style></head><body>
   <h1 class="title">${title} · שבוע ${esc(weekLabel(opts.weekKey))}</h1>
