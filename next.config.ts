@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/rooms/export": ["./data/**"],
   },
+  // Keep puppeteer + the Lambda Chromium build as external so their binary
+  // assets are traced into the serverless function instead of bundled.
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
 };
 
 export default nextConfig;

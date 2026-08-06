@@ -152,25 +152,37 @@ export async function buildRoomsPdfHtml(opts: {
   return { html, roomCount: allocations.length, yeshivaCount: yeshivaOrder.length };
 }
 
-/** Render the report to a PDF Buffer, or null if no headless browser exists. */
+/** Render the report to a PDF Buffer, or null if it can't be produced.
+ *  Locally it drives the machine's own Chrome/Edge; on serverless (Vercel,
+ *  no system browser) it falls back to the bundled @sparticuz/chromium. */
 export async function renderRoomsPdf(opts: {
   weekKey: string;
   label?: string;
 }): Promise<Buffer | null> {
-  const executablePath = findBrowser();
-  if (!executablePath) return null;
-
   const { html, roomCount } = await buildRoomsPdfHtml(opts);
   if (roomCount === 0) return null;
 
   const puppeteer = (await import("puppeteer-core")).default;
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
   try {
-    browser = await puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    const systemPath = findBrowser();
+    if (systemPath) {
+      // Local / dev — the machine's own headless Chrome or Edge.
+      browser = await puppeteer.launch({
+        executablePath: systemPath,
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+    } else {
+      // Serverless (Vercel) — the Chromium build packaged for Lambda.
+      const chromium = (await import("@sparticuz/chromium")).default;
+      chromium.setGraphicsMode = false; // PDF is text-only; skip GL/graphics
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+    }
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });
     const pdf = await page.pdf({

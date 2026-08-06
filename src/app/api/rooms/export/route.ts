@@ -3,6 +3,11 @@ import { auth } from "@/lib/auth";
 import { exportRoomsZip } from "@/lib/rooms-export";
 import { currentWeekKey, weekKeyOf } from "@/lib/weeks";
 
+// Launching headless Chromium (for the bundled PDF) needs the Node runtime and
+// more than the default budget — the cold Chromium start alone can take a few s.
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 /**
  * GET /api/rooms/export?week=YYYY-MM-DD
  *   Returns a zip with one .xlsx per yeshiva that has assignments for the
