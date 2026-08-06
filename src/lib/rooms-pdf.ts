@@ -191,8 +191,11 @@ export async function renderRoomsPdf(opts: {
       margin: { top: "1.2cm", bottom: "1.2cm", left: "1cm", right: "1cm" },
     });
     return Buffer.from(pdf);
-  } catch {
-    return null;
+  } catch (err) {
+    // Surface the real reason (to Vercel logs + up to the caller's warning)
+    // instead of silently degrading — that's how we lost visibility before.
+    console.error("[rooms-pdf] render failed:", err);
+    throw err instanceof Error ? err : new Error(String(err));
   } finally {
     if (browser) await browser.close().catch(() => {});
   }

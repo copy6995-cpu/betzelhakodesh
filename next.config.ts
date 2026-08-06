@@ -9,7 +9,13 @@ const nextConfig: NextConfig = {
   // functions (Vercel traces only what it statically sees imported, not
   // fs.readFileSync targets).
   outputFileTracingIncludes: {
-    "/api/rooms/export": ["./data/**"],
+    // ./data — files the export reads from disk. The chromium binary
+    // (bin/*.br) is referenced by a computed path nft can't follow, so trace
+    // it explicitly or the serverless PDF launch fails with "not found".
+    "/api/rooms/export": [
+      "./data/**",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
   },
   // Keep puppeteer + the Lambda Chromium build as external so their binary
   // assets are traced into the serverless function instead of bundled.

@@ -487,8 +487,10 @@ export async function exportRoomsZip(opts: {
     } else {
       warnings.push("PDF לא נוצר (לא נמצא דפדפן Chrome/Edge להדפסה)");
     }
-  } catch {
-    warnings.push("PDF לא נוצר (שגיאה ביצירת הקובץ)");
+  } catch (e) {
+    warnings.push(
+      `PDF לא נוצר: ${e instanceof Error ? e.message : "שגיאה"}`
+    );
   }
 
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
