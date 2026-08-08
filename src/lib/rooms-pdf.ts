@@ -48,6 +48,7 @@ function esc(s: string): string {
 export async function buildRoomsPdfHtml(opts: {
   weekKey: string;
   label?: string;
+  yeshiva?: string; // limit to one yeshiva (for a per-yeshiva PDF)
 }): Promise<{ html: string; roomCount: number; yeshivaCount: number }> {
   const label = (opts.label ?? "").trim();
   const allocations = await prisma.roomAllocation.findMany({
@@ -87,7 +88,11 @@ export async function buildRoomsPdfHtml(opts: {
 
   const names = [...byYeshiva.keys()];
   const ordered = orderCalendarYeshivot(names);
-  const yeshivaOrder = [...ordered, ...names.filter((n) => !ordered.includes(n))];
+  const allOrder = [...ordered, ...names.filter((n) => !ordered.includes(n))];
+  const yeshivaOrder = opts.yeshiva
+    ? allOrder.filter((y) => y === opts.yeshiva)
+    : allOrder;
+  const inScope = new Set(yeshivaOrder);
   const anyCapacity = allocations.some((a) => a.room.capacity != null);
 
   const sections = yeshivaOrder
@@ -153,7 +158,8 @@ export async function buildRoomsPdfHtml(opts: {
   ${sections || '<p class="muted">אין שיבוצי חדרים לשבוע זה.</p>'}
 </body></html>`;
 
-  return { html, roomCount: allocations.length, yeshivaCount: yeshivaOrder.length };
+  const roomCount = allocations.filter((a) => inScope.has(a.yeshiva)).length;
+  return { html, roomCount, yeshivaCount: yeshivaOrder.length };
 }
 
 /** Render the report to a PDF Buffer, or null if it can't be produced.
@@ -162,6 +168,7 @@ export async function buildRoomsPdfHtml(opts: {
 export async function renderRoomsPdf(opts: {
   weekKey: string;
   label?: string;
+  yeshiva?: string;
 }): Promise<Buffer | null> {
   const { html, roomCount } = await buildRoomsPdfHtml(opts);
   if (roomCount === 0) return null;

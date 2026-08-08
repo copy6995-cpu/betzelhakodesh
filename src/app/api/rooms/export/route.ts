@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { exportRoomsZip } from "@/lib/rooms-export";
+import { exportRoomsZip, exportRoomsPerYeshiva } from "@/lib/rooms-export";
 import { currentWeekKey, weekKeyOf } from "@/lib/weeks";
 
 // Launching headless Chromium (for the bundled PDF) needs the Node runtime and
@@ -23,6 +23,95 @@ export async function GET(req: NextRequest) {
   const raw = url.searchParams.get("week")?.trim();
   const weekKey = raw ? weekKeyOf(new Date(raw)) : currentWeekKey();
   const label = url.searchParams.get("label")?.trim() || "";
+  // A single yeshiva → one file just for it (no zip). Netfree blocks .zip.
+  const yeshiva = url.searchParams.get("yeshiva")?.trim() || "";
+
+  // format=pdf → a PDF as a single file (no zip): the whole building, or one
+  // yeshiva when ?yeshiva= is set. Netfree/filters block .zip, so this is safe.
+  if (url.searchParams.get("format") === "pdf") {
+    try {
+      const { renderRoomsPdf } = await import("@/lib/rooms-pdf");
+      const pdf = await renderRoomsPdf({
+        weekKey,
+        label,
+        yeshiva: yeshiva || undefined,
+      });
+      if (!pdf) {
+        return new Response(
+          JSON.stringify({ error: "אין שיבוצים לשבוע זה" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+          }
+        );
+      }
+      const base = yeshiva ? `${yeshiva} חדרים` : "חלוקת חדרים";
+      const filename = `${base}${label ? ` ${label}` : ""}.pdf`;
+      return new Response(new Uint8Array(pdf), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="rooms.pdf"; filename*=UTF-8''${encodeURIComponent(
+            filename
+          )}`,
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch (e) {
+      return new Response(
+        JSON.stringify({
+          error: e instanceof Error ? e.message : "שגיאה ביצירת ה-PDF",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }
+      );
+    }
+  }
+
+  // A single yeshiva → just its .xlsx, no zip.
+  if (yeshiva) {
+    try {
+      const { files } = await exportRoomsPerYeshiva({ weekKey, label });
+      const buf = files.get(yeshiva);
+      if (!buf) {
+        return new Response(
+          JSON.stringify({ error: "אין שיבוצים לישיבה זו" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+          }
+        );
+      }
+      const safe =
+        `${yeshiva} חדרים${label ? ` ${label}` : ""}`.replace(
+          /[<>:"/\\|?*\n\r\t]/g,
+          "_"
+        ) || "חדרים";
+      return new Response(new Uint8Array(buf), {
+        status: 200,
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="rooms.xlsx"; filename*=UTF-8''${encodeURIComponent(
+            `${safe}.xlsx`
+          )}`,
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch (e) {
+      return new Response(
+        JSON.stringify({
+          error: e instanceof Error ? e.message : "שגיאה ביצוא",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }
+      );
+    }
+  }
 
   try {
     const { buffer, fileCount, warnings } = await exportRoomsZip({

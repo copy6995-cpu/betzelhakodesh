@@ -128,6 +128,9 @@ export default async function RoomsPage({
           <RoomsExportButton
             weekKey={weekKey}
             defaultLabel={parashaForWeek(new Date(`${weekKey}T00:00:00`))}
+            yeshivot={Object.keys(allocatedByYeshiva).sort((a, b) =>
+              a.localeCompare(b, "he")
+            )}
           />
           <Link
             href="/rooms/manage"
