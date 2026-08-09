@@ -24,6 +24,7 @@ export const SECTIONS: Section[] = [
   { key: "bachurim", label: "בחורים", href: "/bachurim", prefixes: ["/bachurim", "/api/bachurim"] },
   { key: "parents", label: "הורים", href: "/parents", prefixes: ["/parents", "/api/parents"] },
   { key: "payments", label: "תשלומים", href: "/payments", prefixes: ["/payments"] },
+  { key: "finance", label: "הכנסות והוצאות", href: "/finance", prefixes: ["/finance"] },
   { key: "nedarim", label: "נדרים פלוס", href: "/nedarim/transactions", prefixes: ["/nedarim", "/api/nedarim"] },
   { key: "beds", label: "מיטות", href: "/yemot/beds", prefixes: ["/yemot/beds", "/api/yemot/beds"] },
   { key: "credit-cards", label: "רישום שנתי ימות המשיח", href: "/yemot/credit-cards", prefixes: ["/yemot/credit-cards"] },

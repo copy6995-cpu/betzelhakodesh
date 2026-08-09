@@ -355,3 +355,23 @@ model CalendarWeek {
   @@unique([yearLabel, weekKey])
   @@index([yearLabel])
 }
+
+/// Manual cash-book rows for the income/expenses page. Auto-computed figures
+/// (Nedarim, group credit, supervisor cost from the calendar) are NOT stored
+/// here — only the hand-entered rows.
+model FinanceEntry {
+  id        String    @id @default(cuid())
+  year      String
+  kind      String // "income" | "expense"
+  /// income: "other" | "check" | "transfer"; expense: "misc" |
+  /// "supervisor-payment" | "beit-malka" | "rent" | ...
+  category  String
+  label     String? // description / supervisor name / project name
+  amount    Float     @default(0)
+  date      DateTime?
+  meta      String? // JSON extras (e.g. beit-malka bed count, supervisor id)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([year, kind])
+}
