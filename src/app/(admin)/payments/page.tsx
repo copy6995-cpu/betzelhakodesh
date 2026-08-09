@@ -20,7 +20,7 @@ export default async function PaymentsPage({
   const year = await getActiveYear();
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const [payments, total, agg] = await Promise.all([
+  const [payments, total, agg, matrixRows] = await Promise.all([
     prisma.payment.findMany({
       where: { student: { year, archived: false } },
       orderBy: { createdAt: "desc" },
@@ -33,10 +33,32 @@ export default async function PaymentsPage({
       where: { student: { year, archived: false } },
       _sum: { amount: true },
     }),
+    prisma.payment.findMany({
+      where: { student: { year, archived: false } },
+      select: { amount: true, method: true, student: { select: { yeshiva: true } } },
+    }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const totalAmt = Number(agg._sum.amount ?? 0);
+
+  // Per-yeshiva × payment-method money matrix (summary table at the top).
+  const methodName = (m: string | null) => (m && m.trim()) || "ללא סיווג";
+  const cell = new Map<string, Map<string, number>>();
+  const methodTotals = new Map<string, number>();
+  const yeshivaTotals = new Map<string, number>();
+  for (const p of matrixRows) {
+    const y = p.student.yeshiva?.trim() || "ללא ישיבה";
+    const m = methodName(p.method);
+    const amt = Number(p.amount);
+    if (!cell.has(y)) cell.set(y, new Map());
+    const row = cell.get(y)!;
+    row.set(m, (row.get(m) ?? 0) + amt);
+    methodTotals.set(m, (methodTotals.get(m) ?? 0) + amt);
+    yeshivaTotals.set(y, (yeshivaTotals.get(y) ?? 0) + amt);
+  }
+  const methods = [...methodTotals.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+  const yeshivot = [...yeshivaTotals.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -57,6 +79,73 @@ export default async function PaymentsPage({
           <SyncPaymentsButton />
         </div>
       </div>
+
+      {yeshivot.length > 0 && (
+        <div className="bg-white rounded-xl card-shadow mb-6 overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)]">
+            <div className="text-sm font-semibold text-[var(--color-primary)]">
+              כמה נכנס לכל ישיבה — לפי אמצעי תשלום
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wider text-[var(--color-muted-foreground)] bg-[var(--color-muted)]">
+                  <th className="sticky start-0 z-10 bg-[var(--color-muted)] py-3 pe-5 ps-5 text-right font-semibold">
+                    ישיבה
+                  </th>
+                  {methods.map((m) => (
+                    <th key={m} className="py-3 px-4 text-left font-semibold whitespace-nowrap">
+                      {m}
+                    </th>
+                  ))}
+                  <th className="py-3 px-4 text-left font-semibold whitespace-nowrap">סה״כ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {yeshivot.map((y) => (
+                  <tr key={y} className="border-t border-[var(--color-border)]/60">
+                    <th className="sticky start-0 z-10 bg-white py-2.5 pe-5 ps-5 text-right font-medium whitespace-nowrap">
+                      {y}
+                    </th>
+                    {methods.map((m) => {
+                      const v = cell.get(y)?.get(m) ?? 0;
+                      return (
+                        <td
+                          key={m}
+                          className={`py-2.5 px-4 text-left tabular-nums ${
+                            v ? "" : "text-[var(--color-muted-foreground)]/40"
+                          }`}
+                        >
+                          {v ? formatILS(v) : "—"}
+                        </td>
+                      );
+                    })}
+                    <td className="py-2.5 px-4 text-left font-semibold text-[var(--color-success)] tabular-nums whitespace-nowrap">
+                      {formatILS(yeshivaTotals.get(y) ?? 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-muted)]/50 font-bold">
+                  <th className="sticky start-0 z-10 bg-[var(--color-muted)]/50 py-3 pe-5 ps-5 text-right whitespace-nowrap">
+                    סה״כ
+                  </th>
+                  {methods.map((m) => (
+                    <td key={m} className="py-3 px-4 text-left tabular-nums whitespace-nowrap">
+                      {formatILS(methodTotals.get(m) ?? 0)}
+                    </td>
+                  ))}
+                  <td className="py-3 px-4 text-left text-[var(--color-success)] tabular-nums whitespace-nowrap">
+                    {formatILS(totalAmt)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl card-shadow">
         <div className="px-5 py-3 border-b border-[var(--color-border)] rounded-t-xl">
