@@ -7,6 +7,7 @@
  */
 import { prisma } from "./prisma";
 import { loadCancellations, isLiveBooking } from "./bed-cancellations";
+import { loadRepsTotal } from "./reps";
 
 export type FinanceEntryRow = {
   id: string;
@@ -129,25 +130,28 @@ export type FinanceData = {
     supervisorTarget: number;
     perSupervisor: { name: string; cost: number }[];
     supervisorPaid: number;
+    repsPaid: number; // paid to yeshiva representatives (monthly grid)
     byCategory: Record<string, FinanceEntryRow[]>;
-    total: number; // actual cash out (all expense rows)
+    total: number; // actual cash out (all expense rows + reps)
   };
   net: number;
 };
 
 export async function loadFinance(year: string): Promise<FinanceData> {
-  const [nedarimAgg, groupsCredit, supervisor, entries] = await Promise.all([
-    prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { method: "נדרים פלוס", student: { year } },
-    }),
-    loadGroupsCredit(),
-    loadSupervisorCost(year),
-    prisma.financeEntry.findMany({
-      where: { year },
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-    }),
-  ]);
+  const [nedarimAgg, groupsCredit, supervisor, entries, repsPaid] =
+    await Promise.all([
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { method: "נדרים פלוס", student: { year } },
+      }),
+      loadGroupsCredit(),
+      loadSupervisorCost(year),
+      prisma.financeEntry.findMany({
+        where: { year },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      }),
+      loadRepsTotal(year, ["yeshiva"]),
+    ]);
 
   const rows: FinanceEntryRow[] = entries.map((e) => ({
     id: e.id,
@@ -171,7 +175,7 @@ export async function loadFinance(year: string): Promise<FinanceData> {
     (a, r) => a + r.amount,
     0
   );
-  const totalExpense = expenseRows.reduce((a, r) => a + r.amount, 0);
+  const totalExpense = expenseRows.reduce((a, r) => a + r.amount, 0) + repsPaid;
 
   return {
     year,
@@ -186,6 +190,7 @@ export async function loadFinance(year: string): Promise<FinanceData> {
       supervisorTarget: supervisor.total,
       perSupervisor: supervisor.perSupervisor,
       supervisorPaid,
+      repsPaid,
       byCategory,
       total: totalExpense,
     },

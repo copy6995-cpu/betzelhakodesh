@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { FinanceData, FinanceEntryRow } from "@/lib/finance";
@@ -315,6 +316,24 @@ export function FinanceUI({ data }: { data: FinanceData }) {
           labelPlaceholder="שם משגיח"
           supervisorOptions={expense.perSupervisor.map((s) => s.name)}
         />
+      </Section>
+
+      {/* Yeshiva representatives */}
+      <Section title="הוצאות · נציגים בישיבות">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm">
+            <span className="font-medium">סה״כ ששולם לנציגים בישיבות</span>
+            <span className="font-semibold ms-2 text-red-600">
+              {nis(expense.repsPaid)}
+            </span>
+          </div>
+          <Link
+            href="/finance/representatives"
+            className="inline-flex items-center h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)]"
+          >
+            טבלת תשלום חודשית ←
+          </Link>
+        </div>
       </Section>
 
       {/* Beit Malka */}

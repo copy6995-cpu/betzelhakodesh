@@ -375,3 +375,23 @@ model FinanceEntry {
 
   @@index([year, kind])
 }
+
+/// A representative paid by the fund. "yeshiva" reps get a monthly-payment
+/// grid (one amount per Hebrew month of the fiscal year); "chul" reps are the
+/// overseas reps. `amounts` is a JSON map monthKey→₪. `userId` links a private
+/// login (each rep sees only their own page) — filled in a later phase.
+model Representative {
+  id        String   @id @default(cuid())
+  year      String
+  kind      String // "yeshiva" | "chul"
+  name      String
+  yeshiva   String? // yeshiva this rep covers (yeshiva reps)
+  userId    String? // linked login account (private rep access)
+  amounts   String   @default("{}") // JSON: { tishrei: 1200, adar1: 0, ... }
+  note      String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([year, kind])
+}
