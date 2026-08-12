@@ -283,6 +283,48 @@ export async function deletePayment(
 }
 
 /**
+ * Detach a student from a shared parent record. Because Student.parentId is
+ * required, we can't just null it — instead we create a fresh parent seeded
+ * from the student's own father-name / last-name / city and move the student
+ * onto it. Used when a bachur was grouped under the wrong (or a shared)
+ * parent; afterwards he has his own separate parent card. The old parent and
+ * its other children are left untouched. Returns the new parentId.
+ */
+export async function detachStudentFromParent(
+  studentId: string
+): Promise<{ parentId: string }> {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      parentId: true,
+      firstName: true,
+      fatherName: true,
+      lastName: true,
+      city: true,
+    },
+  });
+  if (!student) throw new Error("הבחור לא נמצא");
+
+  const newParent = await prisma.parent.create({
+    data: {
+      firstName: student.fatherName?.trim() || student.firstName.trim(),
+      lastName: student.lastName.trim(),
+      city: student.city,
+    },
+  });
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { parentId: newParent.id },
+  });
+
+  revalidatePath(`/bachurim/${studentId}`);
+  revalidatePath("/bachurim");
+  revalidatePath(`/parents/${student.parentId}`);
+  revalidatePath(`/parents/${newParent.id}`);
+  return { parentId: newParent.id };
+}
+
+/**
  * Hard-delete a student and all their payments. Payments are cascade-deleted
  * by the schema (Payment.student has onDelete: Cascade). Returns the
  * parentId so the caller can redirect to the parent page.

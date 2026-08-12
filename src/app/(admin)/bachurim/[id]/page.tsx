@@ -7,6 +7,7 @@ import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
 import { DeleteStudentButton } from "./delete-button";
 import { DeletePaymentButton } from "./delete-payment-button";
 import { PromoteStudentButton } from "./promote-button";
+import { DetachParentButton } from "./detach-parent-button";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function BachurDetailPage({
   const student = await prisma.student.findUnique({
     where: { id },
     include: {
-      parent: { include: { students: { select: { id: true, year: true, firstName: true, lastName: true } } } },
+      parent: { include: { students: { select: { id: true, year: true, firstName: true, lastName: true, personalCode: true } } } },
       payments: { orderBy: { paymentNumber: "asc" } },
     },
   });
@@ -603,6 +604,14 @@ export default async function BachurDetailPage({
                 ))}
               </ul>
             </div>
+            {student.parent.students.some(
+              (s) => s.personalCode !== student.personalCode
+            ) && (
+              <DetachParentButton
+                studentId={student.id}
+                studentName={`${student.firstName} ${student.lastName}`}
+              />
+            )}
           </section>
         </aside>
       </div>

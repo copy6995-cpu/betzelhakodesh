@@ -10,6 +10,7 @@ import { formatILS, formatNum } from "@/lib/utils";
 import { YeshivaPillFilter } from "@/components/yeshiva-pill-filter";
 import { SearchBox } from "@/components/search-box";
 import { Pagination } from "@/components/pagination";
+import { tokenSearchWhere } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -105,15 +106,13 @@ export default async function BachurimPage({
       statusWhere(status, expired),
       ...(q
         ? [
-            {
-              OR: [
-                { firstName: { contains: q } },
-                { lastName: { contains: q } },
-                { fatherName: { contains: q } },
-                { personalCode: { contains: q } },
-                { nedarimHook: { contains: q } },
-              ],
-            },
+            tokenSearchWhere(q, [
+              "firstName",
+              "lastName",
+              "fatherName",
+              "personalCode",
+              "nedarimHook",
+            ])!,
           ]
         : []),
     ],

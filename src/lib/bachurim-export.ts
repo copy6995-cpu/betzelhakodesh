@@ -14,6 +14,7 @@ import {
   notActiveEshelWhere,
   isEshelActive,
 } from "./eshel";
+import { tokenSearchWhere } from "./search";
 
 export type BachurimExportRow = {
   firstName: string;
@@ -191,15 +192,13 @@ export async function loadBachurimForExport(opts: {
       statusWhere(opts.status, expired),
       ...(opts.q?.trim()
         ? [
-            {
-              OR: [
-                { firstName: { contains: opts.q } },
-                { lastName: { contains: opts.q } },
-                { fatherName: { contains: opts.q } },
-                { personalCode: { contains: opts.q } },
-                { nedarimHook: { contains: opts.q } },
-              ],
-            },
+            tokenSearchWhere(opts.q, [
+              "firstName",
+              "lastName",
+              "fatherName",
+              "personalCode",
+              "nedarimHook",
+            ])!,
           ]
         : []),
     ],

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { tokenSearchWhere } from "@/lib/search";
 
 export async function updateParent(payload: {
   id: string;
@@ -55,14 +56,7 @@ export async function searchParents(params: {
       ? {
           AND: [
             baseWhere,
-            {
-              OR: [
-                { firstName: { contains: q} },
-                { lastName: { contains: q} },
-                { phone: { contains: q } },
-                { tz: { contains: q } },
-              ],
-            },
+            tokenSearchWhere(q, ["firstName", "lastName", "phone", "tz"])!,
           ],
         }
       : baseWhere,
@@ -98,14 +92,12 @@ export async function searchStudents(params: {
   const q = params.q.trim();
   const rows = await prisma.student.findMany({
     where: q
-      ? {
-          OR: [
-            { firstName: { contains: q} },
-            { lastName: { contains: q} },
-            { fatherName: { contains: q} },
-            { personalCode: { contains: q } },
-          ],
-        }
+      ? tokenSearchWhere(q, [
+          "firstName",
+          "lastName",
+          "fatherName",
+          "personalCode",
+        ])!
       : {},
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     take: params.limit ?? (q ? 15 : 30),

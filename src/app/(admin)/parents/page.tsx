@@ -4,6 +4,7 @@ import { getActiveYear } from "@/lib/year";
 import { formatILS, formatNum } from "@/lib/utils";
 import { SearchBox } from "@/components/search-box";
 import { Pagination } from "@/components/pagination";
+import { tokenSearchWhere } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +25,7 @@ export default async function ParentsPage({
   const where = {
     students: { some: { year } },
     ...(q
-      ? {
-          OR: [
-            { firstName: { contains: q} },
-            { lastName: { contains: q} },
-            { phone: { contains: q } },
-            { tz: { contains: q } },
-            { email: { contains: q} },
-          ],
-        }
+      ? tokenSearchWhere(q, ["firstName", "lastName", "phone", "tz", "email"])!
       : {}),
   };
 
