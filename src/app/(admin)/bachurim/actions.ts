@@ -283,20 +283,25 @@ export async function deletePayment(
 }
 
 /**
- * Detach a student from a shared parent record. Because Student.parentId is
+ * Detach a bachur from a shared parent record. Because Student.parentId is
  * required, we can't just null it — instead we create a fresh parent seeded
- * from the student's own father-name / last-name / city and move the student
- * onto it. Used when a bachur was grouped under the wrong (or a shared)
- * parent; afterwards he has his own separate parent card. The old parent and
- * its other children are left untouched. Returns the new parentId.
+ * from the bachur's own father-name / last-name / city and move him onto it.
+ *
+ * A bachur is usually SEVERAL Student rows — one per school year, all sharing
+ * the same personalCode and parent (year promotion keeps the code + parent).
+ * Detaching must keep him whole: every one of his year-rows under the shared
+ * parent moves to the new parent together, so תשפ"ו and תשפ"ז don't end up
+ * split across two parents. Genuine siblings (a different personalCode) stay
+ * on the old parent. Returns the new parentId.
  */
 export async function detachStudentFromParent(
   studentId: string
-): Promise<{ parentId: string }> {
+): Promise<{ parentId: string; moved: number }> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     select: {
       parentId: true,
+      personalCode: true,
       firstName: true,
       fatherName: true,
       lastName: true,
@@ -312,8 +317,10 @@ export async function detachStudentFromParent(
       city: student.city,
     },
   });
-  await prisma.student.update({
-    where: { id: studentId },
+  // Move every year-row of THIS bachur (same code, currently under the shared
+  // parent) onto the new parent — not just the row we clicked from.
+  const { count } = await prisma.student.updateMany({
+    where: { parentId: student.parentId, personalCode: student.personalCode },
     data: { parentId: newParent.id },
   });
 
@@ -321,7 +328,7 @@ export async function detachStudentFromParent(
   revalidatePath("/bachurim");
   revalidatePath(`/parents/${student.parentId}`);
   revalidatePath(`/parents/${newParent.id}`);
-  return { parentId: newParent.id };
+  return { parentId: newParent.id, moved: count };
 }
 
 /**
