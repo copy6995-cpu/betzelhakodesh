@@ -8,6 +8,7 @@
 import { prisma } from "./prisma";
 import { loadCancellations, isLiveBooking } from "./bed-cancellations";
 import { loadRepsTotal } from "./reps";
+import { loadBeitMalkaPaid } from "./beit-malka";
 
 export type FinanceEntryRow = {
   id: string;
@@ -131,14 +132,15 @@ export type FinanceData = {
     perSupervisor: { name: string; cost: number }[];
     supervisorPaid: number;
     repsPaid: number; // paid to yeshiva representatives (monthly grid)
+    beitMalkaPaid: number; // cash paid for בית מלכה beds
     byCategory: Record<string, FinanceEntryRow[]>;
-    total: number; // actual cash out (all expense rows + reps)
+    total: number; // actual cash out (all expense rows + reps + beit malka)
   };
   net: number;
 };
 
 export async function loadFinance(year: string): Promise<FinanceData> {
-  const [nedarimAgg, groupsCredit, supervisor, entries, repsPaid] =
+  const [nedarimAgg, groupsCredit, supervisor, entries, repsPaid, beitMalkaPaid] =
     await Promise.all([
       prisma.payment.aggregate({
         _sum: { amount: true },
@@ -151,6 +153,7 @@ export async function loadFinance(year: string): Promise<FinanceData> {
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       }),
       loadRepsTotal(year, ["yeshiva"]),
+      loadBeitMalkaPaid(year),
     ]);
 
   const rows: FinanceEntryRow[] = entries.map((e) => ({
@@ -175,7 +178,15 @@ export async function loadFinance(year: string): Promise<FinanceData> {
     (a, r) => a + r.amount,
     0
   );
-  const totalExpense = expenseRows.reduce((a, r) => a + r.amount, 0) + repsPaid;
+  // "beit-malka" FinanceEntry rows are the deprecated formula-based version —
+  // בית מלכה now lives in its own per-Shabbat table (beitMalkaPaid), so those
+  // legacy rows are not double-counted here.
+  const totalExpense =
+    expenseRows
+      .filter((r) => r.category !== "beit-malka")
+      .reduce((a, r) => a + r.amount, 0) +
+    repsPaid +
+    beitMalkaPaid;
 
   return {
     year,
@@ -191,6 +202,7 @@ export async function loadFinance(year: string): Promise<FinanceData> {
       perSupervisor: supervisor.perSupervisor,
       supervisorPaid,
       repsPaid,
+      beitMalkaPaid,
       byCategory,
       total: totalExpense,
     },

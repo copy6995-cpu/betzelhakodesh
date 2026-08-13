@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { FinanceData, FinanceEntryRow } from "@/lib/finance";
-import { beitMalkaAmount } from "@/lib/beit-malka";
 import { addFinanceEntry, deleteFinanceEntry } from "./actions";
 
 const nis = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
@@ -19,7 +18,6 @@ function EntryList({
   categoryOptions,
   labelPlaceholder,
   supervisorOptions,
-  bedsMode,
 }: {
   rows: FinanceEntryRow[];
   kind: "income" | "expense";
@@ -27,7 +25,6 @@ function EntryList({
   categoryOptions?: { value: string; label: string }[];
   labelPlaceholder: string;
   supervisorOptions?: string[];
-  bedsMode?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -35,13 +32,10 @@ function EntryList({
     fixedCategory ?? categoryOptions?.[0]?.value ?? ""
   );
   const [label, setLabel] = useState("");
-  const [beds, setBeds] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
 
-  const computedAmount = bedsMode
-    ? beitMalkaAmount(parseInt(beds || "0", 10))
-    : parseFloat(amount || "0");
+  const computedAmount = parseFloat(amount || "0");
 
   function add() {
     if (!computedAmount && !label.trim()) return;
@@ -52,10 +46,9 @@ function EntryList({
         label,
         amount: computedAmount,
         date: date || null,
-        meta: bedsMode ? { beds: parseInt(beds || "0", 10) } : null,
+        meta: null,
       });
       setLabel("");
-      setBeds("");
       setAmount("");
       setDate("");
       router.refresh();
@@ -87,9 +80,6 @@ function EntryList({
                         ?.label ?? r.category
                     : ""}
                   {r.label ? ` ${r.label}` : ""}
-                  {bedsMode && r.meta?.beds
-                    ? ` · ${r.meta.beds} מיטות`
-                    : ""}
                 </td>
                 <td className="py-1.5 px-2 text-[var(--color-muted-foreground)] whitespace-nowrap">
                   {r.date ?? ""}
@@ -151,25 +141,14 @@ function EntryList({
             ))}
           </datalist>
         )}
-        {bedsMode ? (
-          <input
-            type="number"
-            min={0}
-            value={beds}
-            onChange={(e) => setBeds(e.target.value)}
-            placeholder="מיטות"
-            className={inputCls + " w-24"}
-          />
-        ) : (
-          <input
-            type="number"
-            min={0}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="₪ סכום"
-            className={inputCls + " w-28"}
-          />
-        )}
+        <input
+          type="number"
+          min={0}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="₪ סכום"
+          className={inputCls + " w-28"}
+        />
         <input
           type="date"
           value={date}
@@ -182,7 +161,7 @@ function EntryList({
           disabled={pending}
           className="h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
         >
-          {bedsMode && beds ? `+ ${nis(computedAmount)}` : "+ הוסף"}
+          + הוסף
         </button>
       </div>
     </div>
@@ -337,17 +316,21 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       </Section>
 
       {/* Beit Malka */}
-      <Section title="הוצאות · בית מלכה">
-        <p className="text-xs text-[var(--color-muted-foreground)] mb-2">
-          ₪22 למיטה + בונוס ₪250 לכל 100 מיטות (מחושב אוטומטית).
-        </p>
-        <EntryList
-          rows={expense.byCategory["beit-malka"] ?? []}
-          kind="expense"
-          fixedCategory="beit-malka"
-          labelPlaceholder="שם פרויקט"
-          bedsMode
-        />
+      <Section title="הוצאות · בית מלכה (מיטות)">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm">
+            <span className="font-medium">שולם עבור מיטות בית מלכה</span>
+            <span className="font-semibold ms-2 text-red-600">
+              {nis(expense.beitMalkaPaid)}
+            </span>
+          </div>
+          <Link
+            href="/finance/beit-malka"
+            className="inline-flex items-center h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)]"
+          >
+            טבלת מיטות לפי שבת ←
+          </Link>
+        </div>
       </Section>
 
       {/* Misc */}

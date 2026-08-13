@@ -393,5 +393,46 @@ model Representative {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  donations ChulDonation[]
+
   @@index([year, kind])
+}
+
+/// One beds-payment row for בית מלכה, per Shabbat. `kind` "מיטות" → amount is
+/// beds × 22; "אחר" → amount is a flat sum (beds unused). `paid` tracks the
+/// cash actually paid against that row.
+model BeitMalkaRow {
+  id        String    @id @default(cuid())
+  year      String
+  reason    String // Shabbat / description
+  kind      String    @default("מיטות") // "מיטות" | "אחר"
+  beds      Int       @default(0)
+  amount    Float     @default(0)
+  paid      Float     @default(0)
+  method    String?
+  date      DateTime?
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([year])
+}
+
+/// A single donation collected by an overseas (חול) representative: the donor,
+/// the USD amount + exchange rate, the resulting ₪ total, and a note.
+model ChulDonation {
+  id        String         @id @default(cuid())
+  repId     String
+  rep       Representative  @relation(fields: [repId], references: [id], onDelete: Cascade)
+  donor     String
+  date      DateTime?
+  usd       Float          @default(0)
+  rate      Float?
+  ils       Float          @default(0)
+  notes     String?
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([repId])
 }
