@@ -241,6 +241,18 @@ export function FinanceUI({ data }: { data: FinanceData }) {
             </span>
             <span className="font-semibold">{nis(income.groupsCredit)}</span>
           </div>
+          <div className="flex justify-between items-center py-1.5 border-b border-[var(--color-border)]/40">
+            <span className="font-medium">
+              נציגי חול{" "}
+              <Link
+                href="/finance/chul"
+                className="text-xs text-[var(--color-primary)] hover:underline font-normal"
+              >
+                (ניהול ←)
+              </Link>
+            </span>
+            <span className="font-semibold">{nis(income.chul)}</span>
+          </div>
         </div>
         <h3 className="text-sm font-medium text-[var(--color-muted-foreground)] mb-1">
           אחר · צ׳ק · העברה

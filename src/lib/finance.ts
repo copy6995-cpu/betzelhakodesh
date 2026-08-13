@@ -7,7 +7,7 @@
  */
 import { prisma } from "./prisma";
 import { loadCancellations, isLiveBooking } from "./bed-cancellations";
-import { loadRepsTotal } from "./reps";
+import { loadRepsTotal, loadChulTotal } from "./reps";
 import { loadBeitMalkaPaid } from "./beit-malka";
 
 export type FinanceEntryRow = {
@@ -123,6 +123,7 @@ export type FinanceData = {
   income: {
     nedarim: number;
     groupsCredit: number;
+    chul: number; // overseas reps' donations (₪)
     manual: FinanceEntryRow[];
     manualTotal: number;
     total: number;
@@ -140,21 +141,29 @@ export type FinanceData = {
 };
 
 export async function loadFinance(year: string): Promise<FinanceData> {
-  const [nedarimAgg, groupsCredit, supervisor, entries, repsPaid, beitMalkaPaid] =
-    await Promise.all([
-      prisma.payment.aggregate({
-        _sum: { amount: true },
-        where: { method: "נדרים פלוס", student: { year } },
-      }),
-      loadGroupsCredit(),
-      loadSupervisorCost(year),
-      prisma.financeEntry.findMany({
-        where: { year },
-        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      }),
-      loadRepsTotal(year, ["yeshiva"]),
-      loadBeitMalkaPaid(year),
-    ]);
+  const [
+    nedarimAgg,
+    groupsCredit,
+    supervisor,
+    entries,
+    repsPaid,
+    beitMalkaPaid,
+    chul,
+  ] = await Promise.all([
+    prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { method: "נדרים פלוס", student: { year } },
+    }),
+    loadGroupsCredit(),
+    loadSupervisorCost(year),
+    prisma.financeEntry.findMany({
+      where: { year },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    }),
+    loadRepsTotal(year, ["yeshiva"]),
+    loadBeitMalkaPaid(year),
+    loadChulTotal(year),
+  ]);
 
   const rows: FinanceEntryRow[] = entries.map((e) => ({
     id: e.id,
@@ -170,7 +179,7 @@ export async function loadFinance(year: string): Promise<FinanceData> {
   const expenseRows = rows.filter((r) => r.kind === "expense");
   const manualTotal = manualIncome.reduce((a, r) => a + r.amount, 0);
   const nedarim = Number(nedarimAgg._sum.amount ?? 0);
-  const totalIncome = nedarim + groupsCredit + manualTotal;
+  const totalIncome = nedarim + groupsCredit + chul + manualTotal;
 
   const byCategory: Record<string, FinanceEntryRow[]> = {};
   for (const r of expenseRows) (byCategory[r.category] ??= []).push(r);
@@ -193,6 +202,7 @@ export async function loadFinance(year: string): Promise<FinanceData> {
     income: {
       nedarim,
       groupsCredit,
+      chul,
       manual: manualIncome,
       manualTotal,
       total: totalIncome,

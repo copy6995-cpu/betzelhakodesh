@@ -91,3 +91,92 @@ export async function loadRepsTotal(year: string, kinds: string[]): Promise<numb
   }
   return total;
 }
+
+// ---- Overseas (חול) reps: each has a list of donations (income) ----
+
+export type ChulRepSummary = {
+  id: string;
+  name: string;
+  count: number;
+  total: number; // Σ ₪
+};
+
+export async function loadChulReps(year: string): Promise<ChulRepSummary[]> {
+  const reps = await prisma.representative.findMany({
+    where: { year, kind: "chul" },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  const ids = reps.map((r) => r.id);
+  const sums = ids.length
+    ? await prisma.chulDonation.groupBy({
+        by: ["repId"],
+        where: { repId: { in: ids } },
+        _sum: { ils: true },
+        _count: { _all: true },
+      })
+    : [];
+  const byRep = new Map(
+    sums.map((s) => [s.repId, { total: s._sum.ils ?? 0, count: s._count._all }])
+  );
+  return reps.map((r) => ({
+    id: r.id,
+    name: r.name,
+    count: byRep.get(r.id)?.count ?? 0,
+    total: byRep.get(r.id)?.total ?? 0,
+  }));
+}
+
+/** Total ₪ collected by all overseas reps this year (income). */
+export async function loadChulTotal(year: string): Promise<number> {
+  const reps = await prisma.representative.findMany({
+    where: { year, kind: "chul" },
+    select: { id: true },
+  });
+  const ids = reps.map((r) => r.id);
+  if (!ids.length) return 0;
+  const agg = await prisma.chulDonation.aggregate({
+    where: { repId: { in: ids } },
+    _sum: { ils: true },
+  });
+  return agg._sum.ils ?? 0;
+}
+
+export type DonationRow = {
+  id: string;
+  donor: string;
+  date: string | null;
+  usd: number;
+  rate: number | null;
+  ils: number;
+  notes: string | null;
+};
+
+export async function loadChulRep(id: string): Promise<{
+  rep: { id: string; name: string };
+  donations: DonationRow[];
+  total: number;
+} | null> {
+  const rep = await prisma.representative.findUnique({
+    where: { id },
+    include: {
+      donations: {
+        orderBy: [{ sortOrder: "asc" }, { date: "asc" }, { createdAt: "asc" }],
+      },
+    },
+  });
+  if (!rep) return null;
+  const donations: DonationRow[] = rep.donations.map((d) => ({
+    id: d.id,
+    donor: d.donor,
+    date: d.date ? d.date.toISOString().slice(0, 10) : null,
+    usd: d.usd,
+    rate: d.rate,
+    ils: d.ils,
+    notes: d.notes,
+  }));
+  return {
+    rep: { id: rep.id, name: rep.name },
+    donations,
+    total: donations.reduce((a, d) => a + d.ils, 0),
+  };
+}
