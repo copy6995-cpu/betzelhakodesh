@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getActiveYear } from "@/lib/year";
 import { SECTIONS, parseSections } from "@/lib/sections";
 import { UsersManager } from "./ui";
 
@@ -13,16 +14,38 @@ export default async function UsersPage() {
   // Defense in depth — the edge proxy already blocks non-admins here.
   if (!me || me.role !== "admin") redirect("/");
 
-  const rows = await prisma.user.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { id: true, email: true, name: true, role: true, sections: true },
-  });
+  const year = await getActiveYear();
+  const [rows, reps] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        sections: true,
+        repId: true,
+      },
+    }),
+    prisma.representative.findMany({
+      where: { year },
+      orderBy: [{ kind: "asc" }, { sortOrder: "asc" }],
+      select: { id: true, name: true, kind: true, yeshiva: true },
+    }),
+  ]);
   const users = rows.map((r) => ({
     id: r.id,
     email: r.email,
     name: r.name,
     role: r.role,
     sections: parseSections(r.sections),
+    repId: r.repId,
+  }));
+  const repOptions = reps.map((r) => ({
+    id: r.id,
+    label: `${r.kind === "chul" ? "חול" : "ישיבה"} · ${r.name}${
+      r.yeshiva ? ` (${r.yeshiva})` : ""
+    }`,
   }));
   const sectionOptions = SECTIONS.map((s) => ({ key: s.key, label: s.label }));
 
@@ -47,6 +70,7 @@ export default async function UsersPage() {
       <UsersManager
         users={users}
         sectionOptions={sectionOptions}
+        repOptions={repOptions}
         currentUserId={me.id ?? ""}
       />
     </div>

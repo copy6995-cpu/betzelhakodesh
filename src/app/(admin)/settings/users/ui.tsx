@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { createUser, updateUser, deleteUser } from "./actions";
 
 type SectionOpt = { key: string; label: string };
+type RepOpt = { id: string; label: string };
 export type UserRow = {
   id: string;
   email: string;
   name: string | null;
   role: string;
   sections: string[];
+  repId?: string | null;
 };
 
 const inputCls =
@@ -23,10 +25,12 @@ const labelCls =
 function UserForm({
   user,
   sectionOptions,
+  repOptions,
   onDone,
 }: {
   user?: UserRow;
   sectionOptions: SectionOpt[];
+  repOptions: RepOpt[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -37,6 +41,7 @@ function UserForm({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState(user?.role ?? "user");
   const [sections, setSections] = useState<string[]>(user?.sections ?? []);
+  const [repId, setRepId] = useState<string>(user?.repId ?? "");
 
   function toggle(key: string) {
     setSections((s) =>
@@ -49,9 +54,22 @@ function UserForm({
     startTransition(async () => {
       try {
         if (user) {
-          await updateUser(user.id, { name, role, sections, password });
+          await updateUser(user.id, {
+            name,
+            role,
+            sections,
+            password,
+            repId: repId || null,
+          });
         } else {
-          await createUser({ email, name, password, role, sections });
+          await createUser({
+            email,
+            name,
+            password,
+            role,
+            sections,
+            repId: repId || null,
+          });
         }
         onDone();
         router.refresh();
@@ -106,11 +124,34 @@ function UserForm({
           >
             <option value="user">משתמש (גישה לפי מדורים)</option>
             <option value="admin">אדמין (גישה מלאה)</option>
+            <option value="rep">נציג (עמוד אישי בלבד)</option>
           </select>
         </div>
       </div>
 
-      {role !== "admin" && (
+      {role === "rep" && (
+        <div>
+          <label className={labelCls}>הנציג המשויך</label>
+          <select
+            value={repId}
+            onChange={(e) => setRepId(e.target.value)}
+            className={inputCls + " cursor-pointer"}
+          >
+            <option value="">— בחר נציג —</option>
+            {repOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+            הנציג יראה רק את העמוד שלו: נציג חול → טבלת התרומות; נציג ישיבה →
+            עמוד התורנות.
+          </p>
+        </div>
+      )}
+
+      {role === "user" && (
         <div>
           <label className={labelCls}>מדורים מותרים</label>
           <div className="flex flex-wrap gap-2">
@@ -163,10 +204,12 @@ function UserForm({
 export function UsersManager({
   users,
   sectionOptions,
+  repOptions,
   currentUserId,
 }: {
   users: UserRow[];
   sectionOptions: SectionOpt[];
+  repOptions: RepOpt[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -209,6 +252,7 @@ export function UsersManager({
       {adding && (
         <UserForm
           sectionOptions={sectionOptions}
+          repOptions={repOptions}
           onDone={() => setAdding(false)}
         />
       )}
@@ -226,6 +270,10 @@ export function UsersManager({
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
                       אדמין
                     </span>
+                  ) : u.role === "rep" ? (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+                      נציג
+                    </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--color-muted)] text-[var(--color-muted-foreground)]">
                       משתמש
@@ -240,7 +288,7 @@ export function UsersManager({
                 <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
                   {u.email}
                 </div>
-                {u.role !== "admin" && (
+                {u.role === "user" && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {u.sections.length === 0 ? (
                       <span className="text-xs text-red-500">
@@ -285,6 +333,7 @@ export function UsersManager({
                 <UserForm
                   user={u}
                   sectionOptions={sectionOptions}
+                  repOptions={repOptions}
                   onDone={() => setEditingId(null)}
                 />
               </div>

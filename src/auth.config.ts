@@ -1,6 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import { NextResponse } from "next/server";
-import { canAccessPath } from "@/lib/sections";
+import { canAccessPath, repHome } from "@/lib/sections";
 
 /**
  * Edge-safe auth config. No bcrypt, no Prisma, no Node-only imports. This
@@ -27,6 +27,8 @@ export const authConfig = {
         token.id = user.id;
         token.role = (user as { role?: string }).role ?? "admin";
         token.sections = (user as { sections?: string[] }).sections ?? [];
+        token.repId = (user as { repId?: string | null }).repId ?? null;
+        token.repKind = (user as { repKind?: string | null }).repKind ?? null;
       }
       return token;
     },
@@ -36,6 +38,10 @@ export const authConfig = {
         (session.user as { role?: string }).role = token.role as string;
         (session.user as { sections?: string[] }).sections =
           (token.sections as string[]) ?? [];
+        (session.user as { repId?: string | null }).repId =
+          (token.repId as string | null) ?? null;
+        (session.user as { repKind?: string | null }).repKind =
+          (token.repKind as string | null) ?? null;
       }
       return session;
     },
@@ -46,13 +52,18 @@ export const authConfig = {
       if (isAuthRoute) return true;
       if (!auth?.user) return false; // not signed in → redirected to signIn
 
-      // Section-level access: admins pass; others are limited to their granted
-      // sections. Blocked-but-signed-in users go to the dashboard rather than
-      // the sign-in page.
       const role = (auth.user as { role?: string }).role;
       const sections = (auth.user as { sections?: string[] }).sections ?? [];
-      if (canAccessPath(role, sections, pathname)) return true;
-      return NextResponse.redirect(new URL("/", request.nextUrl));
+      const repId = (auth.user as { repId?: string | null }).repId ?? null;
+      const repKind = (auth.user as { repKind?: string | null }).repKind ?? null;
+
+      if (canAccessPath(role, sections, pathname, repId, repKind)) return true;
+
+      // Blocked-but-signed-in: a rep goes to their own page, everyone else to
+      // the dashboard (never bounced to the sign-in screen).
+      const fallback = role === "rep" ? repHome(repId, repKind) : "/";
+      if (pathname === fallback) return true; // avoid a redirect loop
+      return NextResponse.redirect(new URL(fallback, request.nextUrl));
     },
   },
 } satisfies NextAuthConfig;

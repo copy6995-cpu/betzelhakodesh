@@ -13,10 +13,14 @@ model User {
   name         String?
   passwordHash String
   // "admin" = full access + can manage users. "user" = limited to `sections`.
+  // "rep" = an external representative locked to their own single page (repId).
   role         String   @default("admin")
   // JSON array of section keys a non-admin user may access (see lib/sections).
   // Ignored for admins. Example: ["bachurim","payments","calendar"].
   sections     String   @default("[]")
+  // For role "rep": the Representative this login is bound to. Their access is
+  // restricted to that rep's own page (chul donations / yeshiva duty).
+  repId        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

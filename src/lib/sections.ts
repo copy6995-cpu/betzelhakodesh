@@ -61,17 +61,50 @@ export function parseSections(raw: string | null | undefined): string[] {
   }
 }
 
+/** The single page a "rep" login lands on and is confined to. */
+export function repHome(
+  repId: string | undefined | null,
+  repKind: string | undefined | null
+): string {
+  if (repKind === "chul" && repId) return `/finance/chul/${repId}`;
+  if (repKind === "yeshiva") return "/tornut";
+  return "/";
+}
+
+/** May a rep (role "rep") open this path? Locked to their own page only. */
+export function repCanAccess(
+  pathname: string,
+  repId: string | undefined | null,
+  repKind: string | undefined | null
+): boolean {
+  if (!repId) return false;
+  if (repKind === "chul") {
+    return (
+      pathname === `/finance/chul/${repId}` ||
+      pathname.startsWith(`/finance/chul/${repId}/`)
+    );
+  }
+  if (repKind === "yeshiva") {
+    return underPrefix(pathname, "/tornut");
+  }
+  return false;
+}
+
 /**
  * Can a user with this role + section list open this path? Admins can open
- * everything; the dashboard is open to all; user-management is admin-only;
- * every other path is gated by its owning section.
+ * everything; a "rep" is locked to their own page; the dashboard is open to
+ * regular users; user-management is admin-only; every other path is gated by
+ * its owning section.
  */
 export function canAccessPath(
   role: string | undefined,
   sections: string[],
-  pathname: string
+  pathname: string,
+  repId?: string | null,
+  repKind?: string | null
 ): boolean {
   if (role === "admin") return true;
+  if (role === "rep") return repCanAccess(pathname, repId, repKind);
   // User management is admins-only regardless of the "settings" grant.
   if (underPrefix(pathname, "/settings/users")) return false;
   if (pathname === "/") return true;

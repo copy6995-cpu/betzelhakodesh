@@ -51,7 +51,8 @@ export function HeaderNav({
   const pathname = usePathname();
   const canSee = (key: string | null) =>
     key === null || role === "admin" || sections.includes(key);
-  const items = LINKS.filter((l) => canSee(l.key));
+  // Reps have a single locked page and no section nav.
+  const items = role === "rep" ? [] : LINKS.filter((l) => canSee(l.key));
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const measureRefs = useRef<(HTMLSpanElement | null)[]>([]);

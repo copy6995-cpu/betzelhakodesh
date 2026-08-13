@@ -22,12 +22,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user) return null;
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
+        // A "rep" login is bound to one Representative; carry its kind so the
+        // edge layer can route/lock them to the right single page.
+        let repKind: string | null = null;
+        if (user.role === "rep" && user.repId) {
+          const rep = await prisma.representative.findUnique({
+            where: { id: user.repId },
+            select: { kind: true },
+          });
+          repKind = rep?.kind ?? null;
+        }
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
           sections: parseSections(user.sections),
+          repId: user.repId ?? null,
+          repKind,
         };
       },
     }),

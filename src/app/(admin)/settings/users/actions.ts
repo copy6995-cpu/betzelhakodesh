@@ -21,8 +21,10 @@ function cleanSections(sections: string[]): string {
   return JSON.stringify([...new Set(keys)]);
 }
 
-function normalizeRole(role: string): "admin" | "user" {
-  return role === "admin" ? "admin" : "user";
+function normalizeRole(role: string): "admin" | "user" | "rep" {
+  if (role === "admin") return "admin";
+  if (role === "rep") return "rep";
+  return "user";
 }
 
 export type UserInput = {
@@ -31,7 +33,16 @@ export type UserInput = {
   password: string;
   role: string;
   sections: string[];
+  repId?: string | null;
 };
+
+/** Bind a rep login to its Representative (reverse link, used for display). */
+async function linkRep(userId: string, repId: string | null): Promise<void> {
+  if (!repId) return;
+  await prisma.representative
+    .update({ where: { id: repId }, data: { userId } })
+    .catch(() => {});
+}
 
 export async function createUser(input: UserInput): Promise<void> {
   await requireAdmin();
@@ -45,21 +56,31 @@ export async function createUser(input: UserInput): Promise<void> {
   if (existing) throw new Error("כתובת האימייל כבר קיימת");
 
   const role = normalizeRole(input.role);
-  await prisma.user.create({
+  if (role === "rep" && !input.repId) throw new Error("צריך לבחור נציג");
+
+  const created = await prisma.user.create({
     data: {
       email,
       name: name || null,
       passwordHash: await bcrypt.hash(input.password, 10),
       role,
-      sections: role === "admin" ? "[]" : cleanSections(input.sections),
+      sections: role === "user" ? cleanSections(input.sections) : "[]",
+      repId: role === "rep" ? input.repId ?? null : null,
     },
   });
+  if (role === "rep") await linkRep(created.id, input.repId ?? null);
   revalidatePath("/settings/users");
 }
 
 export async function updateUser(
   id: string,
-  input: { name: string; role: string; sections: string[]; password?: string }
+  input: {
+    name: string;
+    role: string;
+    sections: string[];
+    password?: string;
+    repId?: string | null;
+  }
 ): Promise<void> {
   const adminId = await requireAdmin();
 
@@ -75,16 +96,19 @@ export async function updateUser(
     const admins = await prisma.user.count({ where: { role: "admin" } });
     if (admins <= 1) throw new Error("חייב להישאר לפחות אדמין אחד");
   }
+  if (role === "rep" && !input.repId) throw new Error("צריך לבחור נציג");
 
   const data: {
     name: string | null;
     role: string;
     sections: string;
+    repId: string | null;
     passwordHash?: string;
   } = {
     name: input.name.trim() || null,
     role,
-    sections: role === "admin" ? "[]" : cleanSections(input.sections),
+    sections: role === "user" ? cleanSections(input.sections) : "[]",
+    repId: role === "rep" ? input.repId ?? null : null,
   };
   if (input.password && input.password.trim()) {
     if (input.password.length < 6)
@@ -93,6 +117,7 @@ export async function updateUser(
   }
 
   await prisma.user.update({ where: { id }, data });
+  if (role === "rep") await linkRep(id, input.repId ?? null);
   revalidatePath("/settings/users");
 }
 

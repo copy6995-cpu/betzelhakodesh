@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
 import { formatILS, formatNum } from "@/lib/utils";
+import { auth } from "@/lib/auth";
+import { repHome } from "@/lib/sections";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +42,13 @@ async function getStats(year: string) {
 }
 
 export default async function DashboardPage() {
+  // Reps never see the admin dashboard — send them to their own page.
+  const session = await auth();
+  const u = session?.user as
+    | { role?: string; repId?: string | null; repKind?: string | null }
+    | undefined;
+  if (u?.role === "rep") redirect(repHome(u.repId, u.repKind));
+
   const year = await getActiveYear();
   const stats = await getStats(year);
 

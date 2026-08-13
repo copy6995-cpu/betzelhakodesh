@@ -5,15 +5,25 @@ import { auth } from "@/lib/auth";
 import { getActiveYear } from "@/lib/year";
 import { revalidatePath } from "next/cache";
 
-async function requireUser() {
+/** Managing the rep list itself is admin-only. */
+async function requireAdmin() {
   const s = await auth();
-  if (!s?.user) throw new Error("לא מורשה");
+  const u = s?.user as { role?: string } | undefined;
+  if (!u || u.role !== "admin") throw new Error("אין הרשאה");
+}
+
+/** A rep may only touch their own rep's data; admins/users may touch any. */
+async function assertCanEditRep(repId: string) {
+  const s = await auth();
+  const u = s?.user as { role?: string; repId?: string | null } | undefined;
+  if (!u) throw new Error("לא מורשה");
+  if (u.role === "rep" && u.repId !== repId) throw new Error("אין הרשאה");
 }
 
 // ---- Reps ----
 
 export async function addChulRep(name: string): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   const year = await getActiveYear();
   if (!name.trim()) return;
   const last = await prisma.representative.findFirst({
@@ -34,7 +44,7 @@ export async function addChulRep(name: string): Promise<void> {
 }
 
 export async function renameChulRep(id: string, name: string): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   await prisma.representative.update({
     where: { id },
     data: { name: name.trim() || "—" },
@@ -43,7 +53,7 @@ export async function renameChulRep(id: string, name: string): Promise<void> {
 }
 
 export async function deleteChulRep(id: string): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   await prisma.representative.delete({ where: { id } });
   revalidatePath("/finance/chul");
   revalidatePath("/finance");
@@ -71,7 +81,7 @@ export async function addDonation(
   repId: string,
   input: DonationInput
 ): Promise<void> {
-  await requireUser();
+  await assertCanEditRep(repId);
   const last = await prisma.chulDonation.findFirst({
     where: { repId },
     orderBy: { sortOrder: "desc" },
@@ -97,7 +107,12 @@ export async function updateDonation(
   id: string,
   fields: Partial<DonationInput>
 ): Promise<void> {
-  await requireUser();
+  const d = await prisma.chulDonation.findUnique({
+    where: { id },
+    select: { repId: true },
+  });
+  if (!d) return;
+  await assertCanEditRep(d.repId);
   await prisma.chulDonation.update({
     where: { id },
     data: {
@@ -119,7 +134,12 @@ export async function updateDonation(
 }
 
 export async function deleteDonation(id: string): Promise<void> {
-  await requireUser();
+  const d = await prisma.chulDonation.findUnique({
+    where: { id },
+    select: { repId: true },
+  });
+  if (!d) return;
+  await assertCanEditRep(d.repId);
   await prisma.chulDonation.delete({ where: { id } });
   revalidatePath("/finance/chul");
   revalidatePath("/finance");

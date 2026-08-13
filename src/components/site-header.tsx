@@ -33,10 +33,12 @@ export async function SiteHeader() {
             <HeaderNav role={role} sections={sections} />
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <YearSwitcher
-              activeYear={activeYear}
-              availableYears={availableYears}
-            />
+            {role !== "rep" && (
+              <YearSwitcher
+                activeYear={activeYear}
+                availableYears={availableYears}
+              />
+            )}
             {sessionUser && <UserMenu name={displayName} />}
           </div>
         </div>
