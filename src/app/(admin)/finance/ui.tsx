@@ -215,6 +215,10 @@ function Section({
 export function FinanceUI({ data }: { data: FinanceData }) {
   const { income, expense, net } = data;
   const supRemaining = expense.supervisorTarget - expense.supervisorPaid;
+  const adneiTotal = (expense.byCategory["adnei"] ?? []).reduce(
+    (a, r) => a + r.amount,
+    0
+  );
 
   return (
     <div className="space-y-5">
@@ -311,6 +315,24 @@ export function FinanceUI({ data }: { data: FinanceData }) {
             className="inline-flex items-center h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)]"
           >
             טבלת תשלום חודשית ←
+          </Link>
+        </div>
+      </Section>
+
+      {/* Adnei HaKodesh */}
+      <Section title="הוצאות · אדני הקודש">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm">
+            <span className="font-medium">סה״כ אדני הקודש</span>
+            <span className="font-semibold ms-2 text-red-600">
+              {nis(adneiTotal)}
+            </span>
+          </div>
+          <Link
+            href="/finance/adnei"
+            className="inline-flex items-center h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)]"
+          >
+            יומן אדני הקודש ←
           </Link>
         </div>
       </Section>
