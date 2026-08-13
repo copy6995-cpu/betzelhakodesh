@@ -31,6 +31,7 @@ export const SECTIONS: Section[] = [
   { key: "rooms", label: "חדרים", href: "/rooms", prefixes: ["/rooms", "/api/rooms"] },
   { key: "registrations", label: "רישומים", href: "/registrations", prefixes: ["/registrations", "/api/registrations"] },
   { key: "calendar", label: "לוח שנה", href: "/calendar", prefixes: ["/calendar", "/api/calendar"] },
+  { key: "tornut", label: "תורנות", href: "/tornut", prefixes: ["/tornut"] },
   { key: "settings", label: "הגדרות", href: "/settings", prefixes: ["/settings", "/api/import"] },
 ];
 

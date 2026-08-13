@@ -440,3 +440,21 @@ model ChulDonation {
 
   @@index([repId])
 }
+
+/// One Shabbat duty slot (תורנות). Admin sets the label + level; a yeshiva rep
+/// claims an open slot for their own yeshiva (bounded by the per-level limit
+/// stored in AppSetting "duty_levels:<year>"). `assignedByRep` records which
+/// rep claimed it so a rep can release only their own pick.
+model DutyShabbat {
+  id              String   @id @default(cuid())
+  year            String
+  label           String
+  level           String   @default("")
+  assignedYeshiva String?
+  assignedByRep   String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([year])
+}
