@@ -18,7 +18,12 @@ export const authConfig = {
   // NEXTAUTH_SECRET too so the same env var works everywhere. Without a secret
   // in production it throws "There is a problem with the server configuration".
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
-  session: { strategy: "jwt" },
+  // Roll the session on a 30-minute inactivity window. The JWT (and its cookie)
+  // expire 30 min after the last refresh, so a tab left CLOSED past that logs
+  // out on return — the client-side idle timer only covers OPEN tabs. Active
+  // use keeps refreshing the token (updateAge), and the SessionProvider polls
+  // every few minutes so an open tab in active use never expires mid-work.
+  session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 60 },
   pages: { signIn: "/auth/signin" },
   providers: [],
   callbacks: {
