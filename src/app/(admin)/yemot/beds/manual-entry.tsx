@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { addManualBedReservationsBatch } from "./actions";
 
 export type RosterEntry = { code: string; name: string; yeshiva: string };
@@ -32,6 +33,7 @@ export function ManualBedButton({
     skipped: string[];
   } | null>(null);
   const [pending, start] = useTransition();
+  const router = useRouter();
 
   const codes = useMemo(
     () => [
@@ -73,6 +75,8 @@ export function ManualBedButton({
       setResult({ added: r.added, skipped: r.skipped });
       // Keep only the codes that didn't take, for an easy retry/correction.
       setCodesText(r.skipped.join("\n"));
+      // Re-render the page so the bed counts/totals reflect the new entries.
+      router.refresh();
     });
   }
 

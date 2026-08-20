@@ -182,7 +182,17 @@ export async function loadRoomDemand(
   // and the LATEST cancellation, by full timestamp (date + שעה). Cancellation
   // rows are the ones whose source is a cancellation path (שלוחה 5).
   const cancelPaths = cancellations.paths;
-  type Latest = { bookTs: number; ariChul: string; group: string; cancelTs: number };
+  // A manual entry is the office asserting "this bachur has a bed" (it survives
+  // syncs) — so it's authoritative: it counts as registered even against a
+  // cancellation, which "last action wins" would otherwise let win because a
+  // manual row has no time (its timestamp is 00:00).
+  type Latest = {
+    bookTs: number;
+    ariChul: string;
+    group: string;
+    cancelTs: number;
+    manual: boolean;
+  };
   const perPerson = new Map<string, Latest>();
   for (const r of bookerRows) {
     const d = parseDmy(r.date, timeFromRaw(r.raw));
@@ -190,15 +200,18 @@ export async function loadRoomDemand(
     const ts = d.getTime();
     let p = perPerson.get(r.personalCode);
     if (!p) {
-      p = { bookTs: -1, ariChul: "", group: "", cancelTs: -1 };
+      p = { bookTs: -1, ariChul: "", group: "", cancelTs: -1, manual: false };
       perPerson.set(r.personalCode, p);
     }
     if (cancelPaths.has(r.source)) {
       if (ts > p.cancelTs) p.cancelTs = ts;
-    } else if (ts > p.bookTs) {
-      p.bookTs = ts;
-      p.ariChul = bookingAriChul(r.raw);
-      p.group = bookingGroup(r.raw);
+    } else {
+      if (r.source === "manual") p.manual = true;
+      if (ts > p.bookTs) {
+        p.bookTs = ts;
+        p.ariChul = bookingAriChul(r.raw);
+        p.group = bookingGroup(r.raw);
+      }
     }
   }
 
@@ -215,9 +228,9 @@ export async function loadRoomDemand(
   for (const s of students) {
     const d = ensure(s.yeshiva);
     const p = perPerson.get(s.personalCode);
-    if (p && p.bookTs >= 0 && p.bookTs >= p.cancelTs) {
-      // נרשמו — הפעולה האחרונה היא הזמנה; אר״י/חו״ל לפי ההזמנה, ואם חסר
-      // (למשל רישום ידני) — לפי האש״ל של התלמיד.
+    if (p && p.bookTs >= 0 && (p.manual || p.bookTs >= p.cancelTs)) {
+      // נרשמו — הפעולה האחרונה היא הזמנה (או רישום ידני, שגובר על ביטול);
+      // אר״י/חו״ל לפי ההזמנה, ואם חסר (למשל רישום ידני) — לפי האש״ל של התלמיד.
       if (p.group === ONE_TIME_GROUP) d.oneTime++;
       else if ((p.ariChul || s.ariChul) === "ארי") d.ariReg++;
       else d.chulReg++;
