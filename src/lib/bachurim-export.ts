@@ -274,6 +274,73 @@ export async function loadBachurimForExport(opts: {
   return { rows, byYeshiva };
 }
 
+/** Yemot upload template header — the exact layout the phone system expects,
+ *  including the five blank spacer columns between שם משפחה and שם האב. */
+const GROUP_CSV_HEADERS = [
+  "קוד תלמיד",
+  "מאושר",
+  "שם תלמיד",
+  "שם משפחה",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "שם האב",
+  "עיר",
+  "שיעור",
+  "ישיבה",
+  'אר"י/חו"ל',
+  "קבוצה",
+];
+
+/** Quote a CSV field only when it contains a comma, quote, or newline. */
+function csvCell(v: string | number): string {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * Build the Yemot HaMashiach "groups" upload as a comma-separated file, in the
+ * exact template layout, with the קבוצה column derived per {@link groupFor}.
+ * Honors the same year/yeshiva/status/search filters as the regular export.
+ * The header row is emitted verbatim (matching the template the office uses);
+ * data cells are quoted only when necessary.
+ */
+export async function buildBachurimGroupsCsv(opts: {
+  year: string;
+  status?: StatusFilter;
+  yeshiva?: string;
+  q?: string;
+}): Promise<string> {
+  const { rows } = await loadBachurimForExport(opts);
+  const lines = [GROUP_CSV_HEADERS.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.personalCode,
+        1,
+        r.firstName,
+        r.lastName,
+        "",
+        "",
+        "",
+        "",
+        "",
+        r.fatherName,
+        r.city ?? "",
+        r.shiur ?? "",
+        r.yeshiva,
+        r.ariChul ?? "",
+        r.group,
+      ]
+        .map(csvCell)
+        .join(",")
+    );
+  }
+  return lines.join("\r\n");
+}
+
 /** Build a workbook with one sheet per yeshiva (sorted by row-count desc)
  *  plus a "כל הבחורים" summary sheet with everything. If a specific
  *  yeshiva filter was applied there's just one sheet. */
