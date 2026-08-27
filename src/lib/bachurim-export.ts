@@ -33,7 +33,28 @@ export type BachurimExportRow = {
   parentPhone: string | null;
   parentEmail: string | null;
   endDate: string | null;
+  group: number | "";
 };
+
+/** Yemot HaMashiach group numbers, keyed by yeshiva. A bachur registered for
+ *  eshel takes their yeshiva's number; one who is NOT registered goes to 23
+ *  (the casual/one-time bucket). An unmapped yeshiva comes back blank. */
+const YESHIVA_GROUP: Record<string, number> = {
+  "בית שמש": 11,
+  "ביתר": 11,
+  "בני ברק": 12,
+  "ברכת אהרן": 13,
+  "דובר שלום": 14,
+  "חיפה": 15,
+  "ירושלים": 16,
+  "ישמח לב": 17,
+  "קריית הרצוג": 18,
+};
+
+function groupFor(yeshiva: string, eshel: boolean): number | "" {
+  if (!eshel) return 23;
+  return YESHIVA_GROUP[yeshiva.trim()] ?? "";
+}
 
 const COLUMNS: Array<{ header: string; key: keyof BachurimExportRow }> = [
   { header: "שם הבחור", key: "firstName" },
@@ -52,6 +73,7 @@ const COLUMNS: Array<{ header: string; key: keyof BachurimExportRow }> = [
   { header: "טלפון הורה", key: "parentPhone" },
   { header: "מייל הורה", key: "parentEmail" },
   { header: "תאריך סיום", key: "endDate" },
+  { header: "קבוצה", key: "group" },
 ];
 
 function sanitizeFilename(name: string): string {
@@ -220,6 +242,7 @@ export async function loadBachurimForExport(opts: {
   const rows: BachurimExportRow[] = students.map((s) => {
     const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
     const price = s.price ?? 0;
+    const eshel = isEshelActive(s.registeredEshel, s.endDateLabel, expired);
     return {
       firstName: s.firstName,
       lastName: s.lastName,
@@ -233,10 +256,11 @@ export async function loadBachurimForExport(opts: {
       paid,
       remaining: price - paid,
       hook: s.nedarimHook,
-      eshel: isEshelActive(s.registeredEshel, s.endDateLabel, expired),
+      eshel,
       parentPhone: s.parent?.phone ?? null,
       parentEmail: s.parent?.email ?? null,
       endDate: s.endDateLabel,
+      group: groupFor(s.yeshiva, eshel),
     };
   });
 
