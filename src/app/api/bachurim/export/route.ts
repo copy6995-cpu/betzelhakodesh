@@ -39,7 +39,9 @@ export async function GET(req: NextRequest) {
     if (status && status !== "all") parts.push(status);
     parts.push(year);
     const fname = parts.join("_") + ".csv";
-    return new Response(csv, {
+    // Prepend a UTF-8 BOM so Excel reads the Hebrew as UTF-8 (without it Excel
+    // falls back to the system ANSI codepage and shows gibberish).
+    return new Response("﻿" + csv, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
