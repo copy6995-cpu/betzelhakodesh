@@ -294,20 +294,6 @@ export default async function BachurimPage({
           >
             ↓ יצוא לפי ישיבה
           </a>
-          <a
-            href={(() => {
-              const params = new URLSearchParams();
-              params.set("format", "groups");
-              if (yeshiva) params.set("yeshiva", yeshiva);
-              if (q) params.set("q", q);
-              if (status !== "all") params.set("status", status);
-              return `/api/bachurim/export?${params}`;
-            })()}
-            className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors"
-            title="קובץ CSV להעלאה לימות המשיח (קוד, שם, ישיבה, קבוצה)"
-          >
-            ↓ יצוא קבוצות
-          </a>
           <Link
             href="/bachurim/new"
             className="inline-flex items-center px-4 h-10 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"

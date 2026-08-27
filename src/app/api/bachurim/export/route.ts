@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import { getActiveYear } from "@/lib/year";
 import {
   buildBachurimWorkbook,
-  buildBachurimGroupsCsv,
   sanitizeFilename,
 } from "@/lib/bachurim-export";
 
@@ -25,33 +24,6 @@ export async function GET(req: NextRequest) {
     undefined) as string | undefined;
   const yeshiva = url.searchParams.get("yeshiva")?.trim() || undefined;
   const q = url.searchParams.get("q")?.trim() || undefined;
-
-  // Yemot "groups" upload — a CSV in the exact template the office uses.
-  if (url.searchParams.get("format")?.trim() === "groups") {
-    const csv = await buildBachurimGroupsCsv({
-      year,
-      status: status as never,
-      yeshiva,
-      q,
-    });
-    const parts = ["קבוצות"];
-    if (yeshiva) parts.push(sanitizeFilename(yeshiva));
-    if (status && status !== "all") parts.push(status);
-    parts.push(year);
-    const fname = parts.join("_") + ".csv";
-    // Prepend a UTF-8 BOM so Excel reads the Hebrew as UTF-8 (without it Excel
-    // falls back to the system ANSI codepage and shows gibberish).
-    return new Response("﻿" + csv, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="groups.csv"; filename*=UTF-8''${encodeURIComponent(
-          fname
-        )}`,
-        "Cache-Control": "no-store",
-      },
-    });
-  }
 
   const buf = await buildBachurimWorkbook({
     year,
