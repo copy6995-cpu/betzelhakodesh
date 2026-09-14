@@ -94,10 +94,42 @@ function safeTableName(seed: string, index: number): string {
  * Personas that appear in Yemot but not in the roster still show up (yeshiva
  * falls back to "(לא ברשימה)").
  */
+export type RegistrationSource = { path: string; label: string };
+
+/**
+ * Resolve the UI's ?source= param to a concrete source path. The DEFAULT (no
+ * or invalid param) is the FIRST registration line (source 1); "all" means no
+ * filter. Returns the full source list for the dropdown too.
+ */
+export async function resolveRegistrationSource(
+  param: string | null | undefined
+): Promise<{
+  source: string | undefined; // undefined = all
+  selected: string; // dropdown value: a path or "all"
+  sources: RegistrationSource[];
+}> {
+  const rows = await prisma.yemotSource.findMany({
+    where: { kind: { not: "cancellation" } },
+    orderBy: { order: "asc" },
+    select: { path: true, label: true },
+  });
+  const sources: RegistrationSource[] = rows.map((r) => ({
+    path: r.path,
+    label: r.label?.trim() || r.path,
+  }));
+  if (param === "all") return { source: undefined, selected: "all", sources };
+  if (param && sources.some((s) => s.path === param))
+    return { source: param, selected: param, sources };
+  const first = sources[0]?.path;
+  return { source: first, selected: first ?? "all", sources };
+}
+
 export async function loadRegistrationsByYeshiva(opts: {
   from: Date;
   to: Date;
   year?: string;
+  /** Limit to a single Yemot source path (one of the registration lines). */
+  source?: string;
 }): Promise<{
   columns: string[];
   groups: Map<string, SubmissionRow[]>;
@@ -105,7 +137,12 @@ export async function loadRegistrationsByYeshiva(opts: {
 }> {
   const year = opts.year ?? (await getActiveYear());
   const [approved, cancellations] = await Promise.all([
-    prisma.yemotBedReservation.findMany({ where: { status: "מאושר" } }),
+    prisma.yemotBedReservation.findMany({
+      where: {
+        status: "מאושר",
+        ...(opts.source ? { source: opts.source } : {}),
+      },
+    }),
     loadCancellations(),
   ]);
 

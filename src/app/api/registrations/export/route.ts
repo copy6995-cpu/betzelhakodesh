@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   loadRegistrationsByYeshiva,
+  resolveRegistrationSource,
   buildSingleYeshivaWorkbook,
   buildCombinedWorkbook,
   sanitizeFilename,
@@ -39,10 +40,14 @@ export async function GET(req: NextRequest) {
     return new Response("Invalid dates", { status: 400 });
   }
 
+  const { source } = await resolveRegistrationSource(
+    url.searchParams.get("source")
+  );
   const { columns, groups } = await loadRegistrationsByYeshiva({
     from,
     to,
     year,
+    source,
   });
 
   let buf: Buffer;

@@ -11,6 +11,8 @@ export function RegistrationsUI({
   counts,
   totalRows,
   noYemotData,
+  sources,
+  source: initialSource,
 }: {
   from: string;
   to: string;
@@ -18,16 +20,20 @@ export function RegistrationsUI({
   counts: Array<{ yeshiva: string; count: number }>;
   totalRows: number;
   noYemotData: boolean;
+  sources: Array<{ path: string; label: string }>;
+  source: string;
 }) {
   const router = useRouter();
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [suffix, setSuffix] = useState("");
+  const [source, setSource] = useState(initialSource);
 
   function apply() {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
+    if (source) qs.set("source", source);
     router.push(`/registrations?${qs.toString()}`);
   }
 
@@ -35,6 +41,7 @@ export function RegistrationsUI({
     `/api/registrations/export?from=${encodeURIComponent(
       from
     )}&to=${encodeURIComponent(to)}` +
+    (source ? `&source=${encodeURIComponent(source)}` : "") +
     (suffix ? `&suffix=${encodeURIComponent(suffix)}` : "");
 
   function downloadOne(yeshiva: string) {
@@ -75,6 +82,44 @@ export function RegistrationsUI({
         <h2 className="text-lg font-semibold text-[var(--color-primary)] mb-4">
           פרמטרים
         </h2>
+
+        {sources.length > 0 && (
+          <div className="mb-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+              רישום (מקור)
+            </span>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {sources.map((s, i) => {
+                const on = source === s.path;
+                return (
+                  <button
+                    key={s.path}
+                    type="button"
+                    onClick={() => setSource(s.path)}
+                    title={s.label}
+                    className={
+                      "px-4 h-9 rounded-full text-sm font-medium border transition-colors " +
+                      (on ? "pill-active" : "pill-idle")
+                    }
+                  >
+                    רישום {i + 1}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setSource("all")}
+                className={
+                  "px-4 h-9 rounded-full text-sm font-medium border transition-colors " +
+                  (source === "all" ? "pill-active" : "pill-idle")
+                }
+              >
+                כל המקורות
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">

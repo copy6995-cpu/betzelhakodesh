@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { loadRegistrationsByYeshiva } from "@/lib/registration-export";
+import {
+  loadRegistrationsByYeshiva,
+  resolveRegistrationSource,
+} from "@/lib/registration-export";
 import { getActiveYear } from "@/lib/year";
 import { RegistrationsUI } from "./ui";
 
@@ -31,7 +34,7 @@ function parseRange(s: string, endOfDay: boolean): Date {
 export default async function RegistrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; year?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; year?: string; source?: string }>;
 }) {
   const sp = await searchParams;
   const today = new Date();
@@ -42,10 +45,17 @@ export default async function RegistrationsPage({
   const to = norm(sp.to ?? isoDT(today), "23:59");
   const year = await getActiveYear(sp.year);
 
+  // The registration lines (Yemot booking sources) the user can filter by.
+  // Default is source 1 — "all" is an explicit choice.
+  const { source, selected, sources } = await resolveRegistrationSource(
+    sp.source
+  );
+
   const loaded = await loadRegistrationsByYeshiva({
     from: parseRange(from, false),
     to: parseRange(to, true),
     year,
+    source,
   });
   const counts = [...loaded.groups.entries()]
     .map(([yeshiva, rows]) => ({ yeshiva, count: rows.length }))
@@ -75,6 +85,8 @@ export default async function RegistrationsPage({
         counts={counts}
         totalRows={loaded.totalRows}
         noYemotData={anyBedsEver === 0}
+        sources={sources}
+        source={selected}
       />
     </div>
   );
