@@ -147,10 +147,20 @@ function timeFromRaw(raw: string | null | undefined): string {
  * (Reservation weekKey is "YYYY-WW" while allocation weeks are "YYYY-MM-DD", so
  * we filter on the reservation date, never on weekKey equality.)
  */
+/** Trailing number of a source path ("ivr2:דוחות/1" → "1"), used to pair a
+ *  registration line with its cancellation line (1↔1). */
+function trailingNum(path: string): string | null {
+  const m = path.match(/(\d+)\s*$/);
+  return m ? m[1] : null;
+}
+
 export async function loadRoomDemand(
   activeYear: string,
   from: Date,
-  to: Date
+  to: Date,
+  /** Limit to one registration line (a booking source path); its matching
+   *  cancellation line (same trailing number) is used for cancellations. */
+  source?: string
 ): Promise<{
   rows: YeshivaDemand[];
   totals: DemandTotals;
@@ -193,8 +203,24 @@ export async function loadRoomDemand(
     cancelTs: number;
     manual: boolean;
   };
+  // When filtering to one registration line, use only its matching cancellation
+  // line (same trailing number) — so line 1's bookings pair with line 1's
+  // cancellations (1↔1), never another line's.
+  const cancelSource = source
+    ? [...cancelPaths].find((p) => trailingNum(p) === trailingNum(source)) ??
+      null
+    : null;
+
   const perPerson = new Map<string, Latest>();
   for (const r of bookerRows) {
+    const isCancel = cancelPaths.has(r.source);
+    if (source) {
+      if (isCancel) {
+        if (r.source !== cancelSource) continue;
+      } else if (r.source !== source) {
+        continue;
+      }
+    }
     const d = parseDmy(r.date, timeFromRaw(r.raw));
     if (!d || d < from || d > to) continue;
     const ts = d.getTime();
@@ -203,7 +229,7 @@ export async function loadRoomDemand(
       p = { bookTs: -1, ariChul: "", group: "", cancelTs: -1, manual: false };
       perPerson.set(r.personalCode, p);
     }
-    if (cancelPaths.has(r.source)) {
+    if (isCancel) {
       if (ts > p.cancelTs) p.cancelTs = ts;
     } else {
       if (r.source === "manual") p.manual = true;

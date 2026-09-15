@@ -13,6 +13,7 @@ import { RoomsDateRange } from "./date-range";
 import { parashaForWeek } from "@/lib/hebrew-calendar";
 import { getActiveYear } from "@/lib/year";
 import { loadRoomDemand, mergeRoomUnits, physicalCode } from "@/lib/rooms";
+import { resolveRegistrationSource } from "@/lib/registration-export";
 import { RoomAssignmentUI } from "./assignment-ui";
 import { RoomsExportButton } from "./export-button";
 import { RoomDemandSummary } from "./demand-summary";
@@ -22,7 +23,12 @@ export const dynamic = "force-dynamic";
 export default async function RoomsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    week?: string;
+    from?: string;
+    to?: string;
+    source?: string;
+  }>;
 }) {
   const sp = await searchParams;
   // The demand table is driven by a reservation-date range (defaults to the
@@ -49,6 +55,12 @@ export default async function RoomsPage({
   };
 
   const activeYear = await getActiveYear();
+  // Registration-line filter for the demand table (default: all lines).
+  const {
+    source: demandSource,
+    selected: sourceSelected,
+    sources,
+  } = await resolveRegistrationSource(sp.source, "all");
 
   const [rooms, yeshivot, allocations, allWeeks, demand] = await Promise.all([
     prisma.room.findMany({
@@ -67,7 +79,7 @@ export default async function RoomsPage({
       orderBy: { weekKey: "desc" },
       take: 8,
     }),
-    loadRoomDemand(activeYear, fromDate, toDate),
+    loadRoomDemand(activeYear, fromDate, toDate, demandSource),
   ]);
 
   // Group rooms by building for display.
@@ -174,7 +186,12 @@ export default async function RoomsPage({
         </div>
       )}
 
-      <RoomsDateRange from={from} to={to} />
+      <RoomsDateRange
+        from={from}
+        to={to}
+        sources={sources}
+        source={sourceSelected}
+      />
 
       <RoomDemandSummary
         rows={demand.rows}

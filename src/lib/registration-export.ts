@@ -102,7 +102,8 @@ export type RegistrationSource = { path: string; label: string };
  * filter. Returns the full source list for the dropdown too.
  */
 export async function resolveRegistrationSource(
-  param: string | null | undefined
+  param: string | null | undefined,
+  defaultTo: "first" | "all" = "first"
 ): Promise<{
   source: string | undefined; // undefined = all
   selected: string; // dropdown value: a path or "all"
@@ -120,6 +121,8 @@ export async function resolveRegistrationSource(
   if (param === "all") return { source: undefined, selected: "all", sources };
   if (param && sources.some((s) => s.path === param))
     return { source: param, selected: param, sources };
+  if (defaultTo === "all")
+    return { source: undefined, selected: "all", sources };
   const first = sources[0]?.path;
   return { source: first, selected: first ?? "all", sources };
 }
