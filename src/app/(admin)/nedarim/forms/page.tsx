@@ -12,9 +12,11 @@ import { NoteCell } from "./note-cell";
 
 /** Fields whose values are editable from the table inline. `Kod_1` fixes
  *  student-code typos in submitted forms so the attach step can find them.
+ *  `Snif1` (שנה) fixes a submission that came in under the wrong year (e.g. a
+ *  card number instead of תשפ"ז) so it re-groups + attaches to the right year.
  *  `TransactionId` (הוק) is editable ONLY when empty — see the table render;
  *  we never want an accidental overwrite of a real hook value. */
-const EDITABLE_FIELDS = new Set(["Kod_1", "TransactionId"]);
+const EDITABLE_FIELDS = new Set(["Kod_1", "Snif1", "TransactionId"]);
 const EDITABLE_WHEN_EMPTY = new Set(["TransactionId"]);
 
 /**
