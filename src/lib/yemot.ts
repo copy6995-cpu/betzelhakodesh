@@ -169,6 +169,24 @@ export async function persistRow(opts: {
  * weeks that no longer appear in the fetched data (so cancellations are
  * reflected), then inserts the fresh rows.
  */
+/** Build one YemotBedReservation create-row from a ymgr row (null if no code). */
+function buildRowData(source: string, weekKey: string, row: YmgrRow) {
+  const code = (row["מספר זיהוי"] ?? "").toString().trim();
+  if (!code) return null;
+  return {
+    source,
+    weekKey,
+    personalCode: code,
+    name: row["שם מזהה"] ?? null,
+    status: row["מצב הזמנה"] ?? null,
+    date: row["תאריך"] ?? null,
+    className: row["גזירה חמישית"] ?? null,
+    branch: row["גזירה שישית"] ?? null,
+    hebDate: row["תאריך עברי"] ?? null,
+    raw: JSON.stringify(row),
+  };
+}
+
 export async function syncItems(opts: {
   token: string;
   items: Array<{ source: string; base: string; weekKey: string }>;
@@ -183,20 +201,41 @@ export async function syncItems(opts: {
       weekKey: it.weekKey,
     });
     touchedKeys.add(`${it.source}|${it.weekKey}`);
-    // Delete old rows for this (source, weekKey) so cancelled reservations are dropped.
+    // Replace the whole (source, weekKey): delete old rows so cancelled
+    // reservations drop, then bulk-insert fresh — one createMany instead of
+    // hundreds of sequential upserts (that's what timed the full sync out).
     await prisma.yemotBedReservation.deleteMany({
       where: { source: it.source, weekKey: it.weekKey },
     });
+    // Dedupe by personalCode (the week's unique key); last row wins.
+    const byCode = new Map<string, NonNullable<ReturnType<typeof buildRowData>>>();
     for (const row of rows) {
-      const ok = await persistRow({
-        source: it.source,
-        weekKey: it.weekKey,
-        row,
+      const d = buildRowData(it.source, it.weekKey, row);
+      if (d) byCode.set(d.personalCode, d);
+    }
+    if (byCode.size > 0) {
+      await prisma.yemotBedReservation.createMany({
+        data: [...byCode.values()],
+        skipDuplicates: true,
       });
-      if (ok) inserted++;
+      inserted += byCode.size;
     }
   }
   return { inserted, deletedWeeks: touchedKeys.size };
+}
+
+/** List every (source, week) item a full sync would pull — the fast "plan"
+ *  step the client uses to then sync in small chunks (avoids the timeout). */
+export async function planFullSync(opts: {
+  token: string;
+  sources: Array<{ path: string }>;
+}): Promise<Array<{ source: string; base: string; weekKey: string }>> {
+  const items: Array<{ source: string; base: string; weekKey: string }> = [];
+  for (const s of opts.sources) {
+    const { base, weeks } = await listWeeks({ token: opts.token, path: s.path });
+    for (const w of weeks) items.push({ source: s.path, base, weekKey: w });
+  }
+  return items;
 }
 
 /** Full sync: pull every week from every source. */

@@ -8,10 +8,16 @@ import {
   removeYemotSource,
   toggleYemotSourceCurrent,
   toggleYemotSourceKind,
-  syncYemotFull,
+  planYemotFullSync,
+  syncYemotItemsBatch,
   syncYemotLatest,
   syncYemotCreditCards,
 } from "./actions";
+
+/** Weeks per server call — small enough to never hit the serverless timeout. */
+const SYNC_CHUNK = 4;
+/** "30-day" sync ≈ the last 5 week files (covers 30 days with margin). */
+const RECENT_WEEKS = 5;
 
 type SourceKind = "booking" | "cancellation";
 
@@ -56,6 +62,7 @@ export function YemotSettingsForm({
     null
   );
   const [pending, startTransition] = useTransition();
+  const [syncing, setSyncing] = useState(false);
 
   function saveTokenSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,20 +86,65 @@ export function YemotSettingsForm({
     });
   }
 
-  function runFull() {
-    setStatus(null);
-    startTransition(async () => {
-      const r = await syncYemotFull();
-      if (!r.ok) {
-        setStatus({ tone: "err", msg: r.error });
+  /**
+   * Chunked sync — plan once, then sync a few weeks per server call so a large
+   * job never hits the serverless timeout. `recentOnly` limits to the last
+   * ~30 days (RECENT_WEEKS week files). Progress is shown live.
+   */
+  async function runChunked(recentOnly: boolean) {
+    if (syncing) return;
+    setSyncing(true);
+    setStatus({ tone: "ok", msg: "בונה תוכנית סנכרון…" });
+    try {
+      const plan = await planYemotFullSync();
+      if (!plan.ok) {
+        setStatus({ tone: "err", msg: plan.error });
         return;
+      }
+      let items = plan.items;
+      if (recentOnly) {
+        const weeks = [...new Set(items.map((i) => i.weekKey))]
+          .sort()
+          .slice(-RECENT_WEEKS);
+        const keep = new Set(weeks);
+        items = items.filter((i) => keep.has(i.weekKey));
+      }
+      if (items.length === 0) {
+        setStatus({ tone: "err", msg: "לא נמצאו שבועות לסנכרון" });
+        return;
+      }
+      const totalWeeks = new Set(items.map((i) => i.weekKey)).size;
+      let inserted = 0;
+      let done = 0;
+      for (let i = 0; i < items.length; i += SYNC_CHUNK) {
+        const chunk = items.slice(i, i + SYNC_CHUNK);
+        const r = await syncYemotItemsBatch(chunk);
+        if (!r.ok) {
+          setStatus({
+            tone: "err",
+            msg: `נעצר: ${r.error} (הושלמו ${done}/${items.length})`,
+          });
+          return;
+        }
+        inserted += r.inserted;
+        done += chunk.length;
+        setStatus({
+          tone: "ok",
+          msg: `מסנכרן… ${done}/${items.length} מנות · ${inserted.toLocaleString(
+            "he-IL"
+          )} רשומות`,
+        });
       }
       setStatus({
         tone: "ok",
-        msg: `סנכרון מלא: ${r.inserted.toLocaleString("he-IL")} רשומות מ-${r.weeks} שבועות`,
+        msg: `${recentOnly ? "סנכרון 30 יום" : "סנכרון מלא"}: ${inserted.toLocaleString(
+          "he-IL"
+        )} רשומות מ-${totalWeeks} שבועות`,
       });
       router.refresh();
-    });
+    } finally {
+      setSyncing(false);
+    }
   }
 
   function runLatest() {
@@ -205,22 +257,30 @@ export function YemotSettingsForm({
           <h2 className="text-lg font-semibold text-[var(--color-primary)]">
             סנכרון מיטות
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={runLatest}
-              disabled={pending || !hasToken || sources.length === 0}
+              disabled={pending || syncing || !hasToken || sources.length === 0}
               className="px-4 h-9 rounded-md border border-[var(--color-border)] text-sm hover:bg-[var(--color-muted)] disabled:opacity-50"
             >
               {pending ? "..." : "עדכן שבוע אחרון"}
             </button>
             <button
               type="button"
-              onClick={runFull}
-              disabled={pending || !hasToken || sources.length === 0}
+              onClick={() => runChunked(true)}
+              disabled={pending || syncing || !hasToken || sources.length === 0}
+              className="px-4 h-9 rounded-md border border-[var(--color-accent)] text-[var(--color-accent)] text-sm font-medium hover:bg-[var(--color-accent)]/10 disabled:opacity-50"
+            >
+              {syncing ? "מסנכרן..." : "סנכרון 30 יום"}
+            </button>
+            <button
+              type="button"
+              onClick={() => runChunked(false)}
+              disabled={pending || syncing || !hasToken || sources.length === 0}
               className="px-4 h-9 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
             >
-              {pending ? "מסנכרן..." : "סנכרון מלא"}
+              {syncing ? "מסנכרן..." : "סנכרון מלא"}
             </button>
           </div>
         </div>

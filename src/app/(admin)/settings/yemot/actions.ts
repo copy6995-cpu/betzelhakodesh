@@ -8,7 +8,11 @@ import {
   syncFull as apiSyncFull,
   syncLatest as apiSyncLatest,
   syncLogCreditCard,
+  planFullSync,
+  syncItems,
 } from "@/lib/yemot";
+
+export type SyncItem = { source: string; base: string; weekKey: string };
 
 export async function saveYemotToken(token: string): Promise<void> {
   await saveToken(token);
@@ -113,6 +117,48 @@ export async function syncYemotFull(): Promise<
     revalidatePath("/settings/yemot");
     revalidatePath("/yemot/beds");
     return result;
+  });
+}
+
+/**
+ * Chunked full sync — the client calls this once to get the plan (every
+ * source×week to pull), then syncs it in small batches via {@link syncYemotItemsBatch}.
+ * This avoids the serverless timeout that killed the one-shot full sync.
+ */
+export async function planYemotFullSync(): Promise<
+  SyncResult<{ items: SyncItem[] }>
+> {
+  return safe(async () => {
+    const token = await getToken();
+    if (!token) throw new Error("לא הוגדר טוקן ימות המשיח");
+    const sources = await prisma.yemotSource.findMany({
+      orderBy: { order: "asc" },
+    });
+    if (sources.length === 0) throw new Error("לא הוגדרו נתיבי מקור");
+    const items = await planFullSync({
+      token,
+      sources: sources.map((s) => ({ path: s.path })),
+    });
+    return { items };
+  });
+}
+
+/** Sync one batch of (source, week) items. Called repeatedly by the client. */
+export async function syncYemotItemsBatch(
+  items: SyncItem[]
+): Promise<SyncResult<{ inserted: number }>> {
+  return safe(async () => {
+    const token = await getToken();
+    if (!token) throw new Error("לא הוגדר טוקן ימות המשיח");
+    const r = await syncItems({ token, items });
+    await prisma.appSetting.upsert({
+      where: { key: "yemot_last_sync" },
+      update: { value: new Date().toISOString() },
+      create: { key: "yemot_last_sync", value: new Date().toISOString() },
+    });
+    revalidatePath("/settings/yemot");
+    revalidatePath("/yemot/beds");
+    return { inserted: r.inserted };
   });
 }
 
