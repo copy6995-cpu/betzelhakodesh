@@ -13,15 +13,28 @@ import {
 
 type Building = { building: string; units: RoomUnit[] };
 
+// Well-separated hues, ordered so the FIRST yeshivot get maximally contrasting
+// colors (red → blue → green → magenta …) rather than adjacent ones. Colors are
+// assigned by the yeshiva's position in the list, so each yeshiva is distinct.
 const PALETTE = [
-  "#FDE68A", "#BFDBFE", "#BBF7D0", "#FBCFE8", "#DDD6FE",
-  "#FED7AA", "#A7F3D0", "#FCA5A5", "#C7D2FE",
+  "#FCA5A5", // red
+  "#93C5FD", // blue
+  "#86EFAC", // green
+  "#F0ABFC", // fuchsia
+  "#FDE047", // yellow
+  "#5EEAD4", // teal
+  "#FDBA74", // orange
+  "#A5B4FC", // indigo
+  "#BEF264", // lime
+  "#FDA4AF", // rose
+  "#7DD3FC", // sky
+  "#C4B5FD", // violet
 ];
 
-function colorFor(yeshiva: string): string {
+function hashIndex(s: string, mod: number): number {
   let h = 0;
-  for (let i = 0; i < yeshiva.length; i++) h = (h * 31 + yeshiva.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h % mod;
 }
 
 function previousSunday(iso: string): string {
@@ -63,6 +76,15 @@ export function RoomAssignmentUI({
     for (const b of buildings) for (const u of b.units) m.set(u.key, u.roomIds);
     return m;
   }, [buildings]);
+
+  // Each yeshiva gets a distinct color by its position in the list; anything not
+  // in the list (e.g. a group/archive label) falls back to a stable hash.
+  const colorFor = useMemo(() => {
+    const map = new Map<string, string>();
+    yeshivot.forEach((y, i) => map.set(y, PALETTE[i % PALETTE.length]));
+    return (yeshiva: string) =>
+      map.get(yeshiva) ?? PALETTE[hashIndex(yeshiva, PALETTE.length)];
+  }, [yeshivot]);
 
   function toggleUnit(key: string) {
     const next = new Set(selected);
