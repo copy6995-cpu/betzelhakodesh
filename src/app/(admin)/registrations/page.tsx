@@ -6,6 +6,7 @@ import {
 } from "@/lib/registration-export";
 import { getActiveYear } from "@/lib/year";
 import { RegistrationsUI } from "./ui";
+import { YemotSyncButtons } from "@/components/yemot-sync-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +32,21 @@ function parseRange(s: string, endOfDay: boolean): Date {
   );
 }
 
+/** "Now" with its fields set to Israel wall-clock, so the default date/time
+ *  shows the current time in Jerusalem rather than the server's UTC. */
+function jerusalemNow(): Date {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })
+  );
+}
+
 export default async function RegistrationsPage({
   searchParams,
 }: {
   searchParams: Promise<{ from?: string; to?: string; year?: string; source?: string }>;
 }) {
   const sp = await searchParams;
-  const today = new Date();
+  const today = jerusalemNow();
   // Normalize to datetime-local format ("YYYY-MM-DDTHH:MM") for the inputs.
   const norm = (s: string, end: string) =>
     s.includes("T") ? s.slice(0, 16) : `${s}T${end}`;
@@ -66,16 +75,17 @@ export default async function RegistrationsPage({
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">
-          רישומים שבועיים
-        </h1>
-        <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
-          מי הזמין מיטה בטווח התאריכים (מקור: ימות המשיח, סטטוס &quot;מאושר&quot;),
-          מקובץ לפי ישיבה מתוך הרשימה של שנת {year}. אפשר להוריד קובץ אחד עם
-          גיליון לכל ישיבה, או קובץ נפרד לכל ישיבה (כמו הסקריפט הישן
-          פיצול_לפי_ישיבה.py).
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)]">
+            רישומים שבועיים
+          </h1>
+          <p className="text-[var(--color-muted-foreground)] mt-1 text-sm max-w-2xl">
+            מי הזמין מיטה בטווח התאריכים (מקור: ימות המשיח, סטטוס
+            &quot;מאושר&quot;), מקובץ לפי ישיבה מתוך הרשימה של שנת {year}.
+          </p>
+        </div>
+        <YemotSyncButtons />
       </div>
 
       <RegistrationsUI

@@ -14,6 +14,7 @@ import { parashaForWeek } from "@/lib/hebrew-calendar";
 import { getActiveYear } from "@/lib/year";
 import { loadRoomDemand, mergeRoomUnits, physicalCode } from "@/lib/rooms";
 import { resolveRegistrationSource } from "@/lib/registration-export";
+import { YemotSyncButtons } from "@/components/yemot-sync-buttons";
 import { RoomAssignmentUI } from "./assignment-ui";
 import { RoomsExportButton } from "./export-button";
 import { RoomDemandSummary } from "./demand-summary";
@@ -165,7 +166,8 @@ export default async function RoomsPage({
             <b>{weekLabel(weekKey)}</b>
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <YemotSyncButtons />
           <RoomsExportButton
             weekKey={weekKey}
             defaultLabel={parashaForWeek(new Date(`${weekKey}T00:00:00`))}
