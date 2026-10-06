@@ -116,6 +116,9 @@ export function HeaderNav({
         <Link
           key={l.href}
           href={l.href}
+          // Force full prefetch (incl. the dynamic data) so the section is
+          // already fetched by the time it's clicked — opens instantly.
+          prefetch
           data-active={isActive(pathname, l)}
           className={ITEM_CLS + " shrink-0"}
         >
@@ -163,6 +166,7 @@ export function HeaderNav({
                   <Link
                     key={l.href}
                     href={l.href}
+                    prefetch
                     data-active={isActive(pathname, l)}
                     onClick={() => setOpen(false)}
                     className="block px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:text-white data-[active=true]:bg-white/10"
