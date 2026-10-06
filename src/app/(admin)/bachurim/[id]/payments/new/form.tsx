@@ -94,6 +94,7 @@ export function PaymentForm({
           <option>העברות</option>
           <option>צ'יק</option>
           <option>נדרים פלוס</option>
+          <option>חד פעמי</option>
           <option>אחר</option>
         </select>
       </div>

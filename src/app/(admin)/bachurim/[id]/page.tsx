@@ -97,11 +97,17 @@ export default async function BachurDetailPage({
   // Yemot credit-card registrations — matched by (personalCode, year). The
   // card rows carry the registration target year, so no createdAt cutoff is
   // needed like the bed/nedarim lists above.
+  // All credit-card charges under this bachur's code — any year — so every
+  // payment he made by phone shows in his card (a separate, read-only list
+  // that doesn't affect the annual שולם/יתרה).
   const yemotCards = await prisma.yemotCreditCard.findMany({
-    where: { personalCode: student.personalCode, year: student.year },
+    where: { personalCode: student.personalCode },
     orderBy: { date: "desc" },
   });
-  const approvedCards = yemotCards.filter((c) => c.status === "מאושר");
+  // The hook display below stays scoped to this year's approved charge.
+  const approvedCards = yemotCards.filter(
+    (c) => c.status === "מאושר" && c.year === student.year
+  );
 
   // Effective אש"ל status: booked AND the season hasn't lapsed. The season's
   // cutoff date lives in EndDateOption(year, endDateLabel).
