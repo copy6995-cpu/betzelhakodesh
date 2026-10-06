@@ -87,6 +87,19 @@ export async function clearYeshivaAllocations(
   return { removed: res.count };
 }
 
+/** Clear every allocation of a whole מתחם (building) for the week. */
+export async function clearBuildingAllocations(
+  weekKey: string,
+  roomIds: string[]
+): Promise<{ removed: number }> {
+  if (roomIds.length === 0) return { removed: 0 };
+  const res = await prisma.roomAllocation.deleteMany({
+    where: { weekKey, roomId: { in: roomIds } },
+  });
+  revalidatePath("/rooms");
+  return { removed: res.count };
+}
+
 /** Copy allocations from `sourceWeek` to `targetWeek`. Rooms already assigned
  *  in the target week are left alone (so re-runs are safe). */
 export async function copyFromWeek(

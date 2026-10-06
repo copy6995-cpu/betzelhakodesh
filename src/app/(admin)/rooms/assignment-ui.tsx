@@ -7,6 +7,7 @@ import {
   assignRooms,
   unassignRoom,
   clearYeshivaAllocations,
+  clearBuildingAllocations,
   copyFromWeek,
 } from "./actions";
 
@@ -130,6 +131,27 @@ export function RoomAssignmentUI({
       const r = await clearYeshivaAllocations(weekKey, targetYeshiva);
       setMsg({ tone: "ok", text: `בוטלו ${r.removed} חדרים מ-${targetYeshiva}` });
       router.refresh();
+    });
+  }
+
+  function doClearBuilding(building: Building) {
+    const roomIds = building.units.flatMap((u) => u.roomIds);
+    if (roomIds.length === 0) return;
+    if (!confirm(`לבטל את כל השיבוצים ב"${building.building}" השבוע?`)) return;
+    startTransition(async () => {
+      try {
+        const r = await clearBuildingAllocations(weekKey, roomIds);
+        const next = new Set(selected);
+        for (const u of building.units) next.delete(u.key);
+        setSelected(next);
+        setMsg({
+          tone: "ok",
+          text: `בוטלו ${r.removed} שיבוצים ב-${building.building}`,
+        });
+        router.refresh();
+      } catch (err) {
+        setMsg({ tone: "err", text: err instanceof Error ? err.message : "שגיאה" });
+      }
     });
   }
 
@@ -316,6 +338,7 @@ export function RoomAssignmentUI({
         )}
         {buildings.map((b) => {
           const unassignedHere = b.units.filter((u) => !u.assignedTo).length;
+          const assignedHere = b.units.length - unassignedHere;
           return (
             <section
               key={b.building}
@@ -334,6 +357,16 @@ export function RoomAssignmentUI({
                       className="ms-3 underline hover:text-[var(--color-accent)]"
                     >
                       בחר את כל הפנויים
+                    </button>
+                  )}
+                  {assignedHere > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => doClearBuilding(b)}
+                      disabled={pending}
+                      className="ms-3 underline text-red-600 hover:text-red-700 disabled:opacity-50"
+                    >
+                      בטל שיבוץ המתחם
                     </button>
                   )}
                 </div>
