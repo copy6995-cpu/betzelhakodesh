@@ -7,10 +7,10 @@ import { PrintControls } from "./print-button";
 export const dynamic = "force-dynamic";
 
 /**
- * Print-optimized room-assignment report, one yeshiva per page, grouped by
- * wing (אגף = Room.building). Rendered as HTML so the browser's "Save as PDF"
- * handles Hebrew RTL perfectly; a visibility trick isolates it from the admin
- * chrome when printing.
+ * Print-optimized room-assignment report, one מתחם (אגף = Room.building) per
+ * page, each headed "[מתחם] - [ישיבה]". Rendered as HTML so the browser's
+ * "Save as PDF" handles Hebrew RTL perfectly; a visibility trick isolates it
+ * from the admin chrome when printing.
  */
 export default async function RoomsPrintPage({
   searchParams,
@@ -62,6 +62,16 @@ export default async function RoomsPrintPage({
   const ordered = orderCalendarYeshivot(names);
   const yeshivaOrder = [...ordered, ...names.filter((n) => !ordered.includes(n))];
 
+  // One page per מתחם (building): a yeshiva spanning several מתחמים is split so
+  // each prints on its own page, headed "[מתחם] - [ישיבה]".
+  const pages: { yeshiva: string; building: string; units: RoomUnit[] }[] = [];
+  for (const yeshiva of yeshivaOrder) {
+    const buildings = byYeshiva.get(yeshiva)!;
+    for (const [building, units] of buildings) {
+      pages.push({ yeshiva, building, units });
+    }
+  }
+
   const anyCapacity = allocations.some((a) => a.room.capacity != null);
   const title = `חלוקת חדרים${label ? ` — ${label}` : ""}`;
 
@@ -98,55 +108,33 @@ export default async function RoomsPrintPage({
         </p>
       ) : (
         <div className="space-y-8">
-          {yeshivaOrder.map((yeshiva) => {
-            const buildings = byYeshiva.get(yeshiva)!;
-            const roomCount = [...buildings.values()].reduce(
-              (n, u) => n + u.length,
-              0
-            );
-            const bedCount = [...buildings.values()].reduce(
-              (n, units) =>
-                n + units.reduce((m, u) => m + (u.capacity ?? 0), 0),
-              0
-            );
+          {pages.map(({ yeshiva, building, units }) => {
+            const bedCount = units.reduce((m, u) => m + (u.capacity ?? 0), 0);
             return (
-              <section key={yeshiva} className="yeshiva-page">
+              <section key={`${yeshiva}|${building}`} className="yeshiva-page">
                 <div className="flex items-baseline justify-between border-b-2 border-[var(--color-primary)] pb-1 mb-3">
                   <h2 className="text-xl font-bold text-[var(--color-primary)]">
-                    {yeshiva}
+                    {building} - {yeshiva}
                   </h2>
                   <span className="text-sm text-[var(--color-muted-foreground)]">
                     {label ? `${label} · ` : ""}
-                    {roomCount} חדרים
+                    {units.length} חדרים
                     {anyCapacity ? ` · ${bedCount} מיטות` : ""}
                   </span>
                 </div>
-                <div className="flex flex-col gap-3">
-                  {[...buildings.entries()].map(([building, units]) => (
-                    <div key={building} className="break-inside-avoid">
-                      <h3 className="font-semibold text-sm mb-1 text-[var(--color-foreground)]">
-                        {building}
-                        <span className="font-normal text-[var(--color-muted-foreground)]">
-                          {" "}
-                          ({units.length})
+                <div className="flex flex-wrap gap-1.5">
+                  {units.map((u) => (
+                    <span
+                      key={u.key}
+                      className="inline-flex items-center gap-1 border border-[var(--color-border)] rounded px-2 py-0.5 text-sm font-mono"
+                    >
+                      {u.code}
+                      {anyCapacity && u.capacity != null && (
+                        <span className="text-[10px] text-[var(--color-muted-foreground)]">
+                          {u.capacity}
                         </span>
-                      </h3>
-                      <div className="flex flex-wrap gap-1.5">
-                        {units.map((u) => (
-                          <span
-                            key={u.key}
-                            className="inline-flex items-center gap-1 border border-[var(--color-border)] rounded px-2 py-0.5 text-sm font-mono"
-                          >
-                            {u.code}
-                            {anyCapacity && u.capacity != null && (
-                              <span className="text-[10px] text-[var(--color-muted-foreground)]">
-                                {u.capacity}
-                              </span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                      )}
+                    </span>
                   ))}
                 </div>
               </section>

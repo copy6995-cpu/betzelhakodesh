@@ -95,38 +95,30 @@ export async function buildRoomsPdfHtml(opts: {
   const inScope = new Set(yeshivaOrder);
   const anyCapacity = allocations.some((a) => a.room.capacity != null);
 
+  // One page per מתחם (building): a yeshiva that occupies several מתחמים is
+  // split so each prints on its own page, titled "[מתחם] - [ישיבה]".
   const sections = yeshivaOrder
-    .map((yeshiva) => {
+    .flatMap((yeshiva) => {
       const buildings = byYeshiva.get(yeshiva)!;
-      let rooms = 0;
-      let beds = 0;
-      for (const units of buildings.values()) {
-        rooms += units.length;
-        for (const u of units) beds += u.capacity ?? 0;
-      }
-      const wings = [...buildings.entries()]
-        .map(([building, units]) => {
-          const chips = units
-            .map(
-              (u) =>
-                `<span class="chip"><bdi>${esc(u.code)}</bdi>${
-                  anyCapacity && u.capacity != null
-                    ? `<small>${u.capacity}</small>`
-                    : ""
-                }</span>`
-            )
-            .join("");
-          return `<div class="wing"><div class="wing-h">${esc(
-            building
-          )} <span class="muted">(${units.length})</span></div><div class="chips">${chips}</div></div>`;
-        })
-        .join("");
-      return `<section class="yeshiva">
-        <div class="y-head"><h2>${esc(yeshiva)}</h2><span class="muted">${
-        label ? esc(label) + " · " : ""
-      }${rooms} חדרים${anyCapacity ? ` · ${beds} מיטות` : ""}</span></div>
-        ${wings}
+      return [...buildings.entries()].map(([building, units]) => {
+        const beds = units.reduce((m, u) => m + (u.capacity ?? 0), 0);
+        const chips = units
+          .map(
+            (u) =>
+              `<span class="chip"><bdi>${esc(u.code)}</bdi>${
+                anyCapacity && u.capacity != null
+                  ? `<small>${u.capacity}</small>`
+                  : ""
+              }</span>`
+          )
+          .join("");
+        return `<section class="page">
+        <div class="y-head"><h2>${esc(building)} - ${esc(yeshiva)}</h2><span class="muted">${
+          label ? esc(label) + " · " : ""
+        }${units.length} חדרים${anyCapacity ? ` · ${beds} מיטות` : ""}</span></div>
+        <div class="chips">${chips}</div>
       </section>`;
+      });
     })
     .join("");
 
@@ -136,9 +128,10 @@ export async function buildRoomsPdfHtml(opts: {
   * { box-sizing: border-box; }
   body { font-family: Arial, "Segoe UI", sans-serif; margin: 0; color: #1a1a1a; }
   @page { size: A4; margin: 1.2cm; }
-  /* Flow the yeshivot one after another (not a page each) — but keep each
-     yeshiva intact rather than splitting it across a page break. */
-  .yeshiva { break-inside: avoid; margin-bottom: 16px; }
+  /* One מתחם per page: each starts on a fresh page (the first avoids a leading
+     blank page), and never splits across a page break. */
+  .page { break-before: page; break-inside: avoid; margin-bottom: 16px; }
+  .page:first-of-type { break-before: avoid; }
   .y-head { display: flex; align-items: baseline; justify-content: space-between;
             border-bottom: 2px solid #0f2942; padding-bottom: 4px; margin: 0 0 8px; }
   h2 { color: #0f2942; font-size: 20px; margin: 0; }

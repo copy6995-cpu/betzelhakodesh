@@ -308,8 +308,12 @@ export async function exportRoomsPerYeshiva(opts: {
     return { files: new Map(), warnings: ["אין שיבוצי חדרים לשבוע זה"] };
   }
 
-  // Group by yeshiva → sheet name → list of assigned ranges
+  // Group by yeshiva → sheet name → list of assigned ranges. Each template
+  // sheet is a מתחם, so a yeshiva that spans several מתחמים already gets one
+  // sheet per מתחם. We also track which אגף/building(s) sit on each sheet so
+  // the print header can read "[מתחם] - [ישיבה]" (e.g. "בית מלכה - קריית הרצוג").
   const byGroup = new Map<string, Map<string, Bounds[]>>();
+  const bldBySheet = new Map<string, Map<string, Set<string>>>();
   for (const a of allocations) {
     const info = ranges[a.room.code];
     if (!info) {
@@ -321,6 +325,12 @@ export async function exportRoomsPerYeshiva(opts: {
     arr.push(parseA1Range(info.range));
     sheetMap.set(info.sheet, arr);
     byGroup.set(a.yeshiva, sheetMap);
+
+    const bm = bldBySheet.get(a.yeshiva) ?? new Map<string, Set<string>>();
+    const bs = bm.get(info.sheet) ?? new Set<string>();
+    bs.add(a.room.building);
+    bm.set(info.sheet, bs);
+    bldBySheet.set(a.yeshiva, bm);
   }
 
   // Every room in the JSON, grouped by sheet — used to know what to clear.
@@ -380,11 +390,14 @@ export async function exportRoomsPerYeshiva(opts: {
         /(<pageSetup\b[^>]*?)\s+r:id="[^"]*"/g,
         "$1"
       );
-      // Print header/title so a printed sheet is labelled.
+      // Print header/title so a printed sheet is labelled "[מתחם] - [ישיבה]".
       const label = (opts.label ?? "").trim();
+      const bldHere = bldBySheet.get(yeshiva)?.get(sheetName);
+      const buildingLabel =
+        bldHere && bldHere.size > 0 ? [...bldHere].join(" / ") : sheetName;
       xml = injectPrintHeader(
         xml,
-        `${yeshiva} חדרים${label ? ` ${label}` : ""}`
+        `${buildingLabel} - ${yeshiva}${label ? ` · ${label}` : ""}`
       );
       zip.file(filePath, xml);
     }
