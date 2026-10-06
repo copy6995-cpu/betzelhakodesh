@@ -312,10 +312,10 @@ export default async function BachurimPage({
             {formatNum(total)} בחורים
           </div>
         </div>
-        {/* No overflow-x wrapper — per CSS spec, overflow-x:auto forces
-            overflow-y to compute as auto, which creates a scroll container
-            that captures our sticky <th>s (they'd stick to the wrapper
-            instead of the viewport). */}
+        {/* No overflow-x wrapper on desktop — per CSS spec overflow-x:auto
+            forces overflow-y to auto, which would capture our sticky <th>s.
+            On mobile a global rule (.card-shadow table) makes the table itself
+            scroll horizontally instead, so the page never shifts sideways. */}
         <div>
           <table className="w-full text-sm">
             <thead>

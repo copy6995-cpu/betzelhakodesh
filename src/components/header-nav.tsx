@@ -9,28 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { SECTIONS } from "@/lib/sections";
-
-type L = { href: string; label: string; key: string | null; prefixes: string[] };
-
-/** Nav links derived from the section catalog, with the dashboard prepended.
- *  `key: null` marks a link everyone sees (the dashboard). */
-const LINKS: L[] = [
-  { href: "/", label: "דשבורד", key: null, prefixes: [] },
-  ...SECTIONS.map((s) => ({
-    href: s.href,
-    label: s.label,
-    key: s.key,
-    prefixes: s.prefixes,
-  })),
-];
-
-function isActive(pathname: string, link: L): boolean {
-  if (link.key === null) return pathname === "/";
-  return link.prefixes.some(
-    (p) => pathname === p || pathname.startsWith(p + "/")
-  );
-}
+import {
+  navIsActive as isActive,
+  visibleNavLinks,
+} from "@/lib/nav-links";
 
 const ITEM_CLS =
   "nav-link-gold whitespace-nowrap px-2.5 text-sm font-medium text-white/80 hover:text-white transition-colors";
@@ -49,10 +31,8 @@ export function HeaderNav({
   sections: string[];
 }) {
   const pathname = usePathname();
-  const canSee = (key: string | null) =>
-    key === null || role === "admin" || sections.includes(key);
   // Reps have a single locked page and no section nav.
-  const items = role === "rep" ? [] : LINKS.filter((l) => canSee(l.key));
+  const items = visibleNavLinks(role, sections);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const measureRefs = useRef<(HTMLSpanElement | null)[]>([]);

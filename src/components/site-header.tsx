@@ -3,6 +3,7 @@ import { getActiveYear, getAvailableYears } from "@/lib/year";
 import { auth } from "@/lib/auth";
 import { UserMenu } from "./user-menu";
 import { HeaderNav } from "./header-nav";
+import { MobileNav } from "./mobile-nav";
 import { YearSwitcher } from "./year-switcher";
 
 export async function SiteHeader() {
@@ -21,7 +22,10 @@ export async function SiteHeader() {
     <header className="header-navy text-white sticky top-0 z-50">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-4 md:gap-8 min-w-0 flex-1">
+          <div className="flex items-center gap-2 md:gap-8 min-w-0 flex-1">
+            {role !== "rep" && (
+              <MobileNav role={role} sections={sections} />
+            )}
             <Link href="/" className="flex items-center gap-3 shrink-0">
               <div className="w-9 h-9 rounded-lg bg-[var(--color-accent)] flex items-center justify-center shrink-0">
                 <span className="text-white font-bold text-sm">בצ</span>

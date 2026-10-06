@@ -250,7 +250,7 @@ export function CalendarGrid({
       <div className="bg-white rounded-xl card-shadow overflow-auto max-h-[calc(100vh-14rem)]">
         {/* border-separate (not collapse) — collapse breaks position:sticky on
             <th> in Chromium, so the header wouldn't stay pinned on scroll. */}
-        <table className="text-sm border-separate border-spacing-0 whitespace-nowrap">
+        <table className="no-scroll-x text-sm border-separate border-spacing-0 whitespace-nowrap">
           <thead>
             <tr className="bg-[var(--color-muted)] text-xs">
               <th rowSpan={2} className="sticky right-0 top-0 z-30 bg-[var(--color-muted)] w-[84px] min-w-[84px] py-2 px-2 border-e border-[var(--color-border)]">

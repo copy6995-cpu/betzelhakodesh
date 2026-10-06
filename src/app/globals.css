@@ -103,3 +103,26 @@ body {
 tbody tr:not(.no-hover):hover {
   background-color: rgba(236, 234, 228, 0.5);
 }
+
+/* --- Mobile responsiveness --- */
+@media (max-width: 767px) {
+  /* Wide data tables scroll horizontally inside their card instead of pushing
+     the whole page sideways. Scoped to cards so calendar/price grids and other
+     layout tables are untouched. `display:block` turns the table into its own
+     horizontal scroll container; nowrap keeps columns at their natural width.
+     Opt a table out with .no-scroll-x. */
+  .card-shadow table:not(.no-scroll-x) {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tables deliberately marked scrollable even outside a card. */
+  table.scroll-x-mobile {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+}

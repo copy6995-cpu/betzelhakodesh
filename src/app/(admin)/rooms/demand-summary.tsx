@@ -58,7 +58,7 @@ export function RoomDemandSummary({
           חד פעמי · עמודות האגפים = מיטות ששובצו · לא שובצו = סה״כ פחות ששובץ
         </div>
       </div>
-      <table className="w-full text-sm border-separate border-spacing-0">
+      <table className="no-scroll-x w-full text-sm border-separate border-spacing-0">
         <thead>
           <tr className="bg-[var(--color-primary)] text-white text-xs">
             <th className="py-2.5 pe-4 ps-3 text-right whitespace-nowrap sticky start-0 bg-[var(--color-primary)] z-10">
