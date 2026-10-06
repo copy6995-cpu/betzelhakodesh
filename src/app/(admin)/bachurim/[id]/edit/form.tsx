@@ -19,6 +19,8 @@ type StudentFields = {
   nedarimHook: string;
   endDateLabel: string;
   registeredEshel: boolean;
+  frozen: boolean;
+  frozenReason: string;
   notes: string;
   parent: {
     id: string;
@@ -101,11 +103,28 @@ export function BachurEditForm({
           </Field>
           <Field label="רשום באש״ל">
             <Select
-              value={f.registeredEshel ? "כן" : "לא"}
-              onChange={(v) => set("registeredEshel", v === "כן")}
-              options={["לא", "כן"]}
+              value={f.frozen ? "מוקפא" : f.registeredEshel ? "כן" : "לא"}
+              onChange={(v) =>
+                v === "מוקפא"
+                  ? set("frozen", true)
+                  : setF((prev) => ({
+                      ...prev,
+                      frozen: false,
+                      frozenReason: "",
+                      registeredEshel: v === "כן",
+                    }))
+              }
+              options={["לא", "כן", "מוקפא"]}
             />
           </Field>
+          {f.frozen && (
+            <Field label="סיבת הקפאה (רשות)">
+              <Input
+                value={f.frozenReason}
+                onChange={(v) => set("frozenReason", v)}
+              />
+            </Field>
+          )}
         </Grid>
       </Section>
 

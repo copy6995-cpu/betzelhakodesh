@@ -41,6 +41,8 @@ export default async function EditBachurPage({
           nedarimHook: student.nedarimHook ?? "",
           endDateLabel: student.endDateLabel ?? "",
           registeredEshel: student.registeredEshel,
+          frozen: student.frozen,
+          frozenReason: student.frozenReason ?? "",
           notes: student.notes ?? "",
           parent: {
             id: student.parent.id,

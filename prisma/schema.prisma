@@ -77,6 +77,11 @@ model Student {
   yeshivaCode     String?
   notes           String?
   archived        Boolean  @default(false)
+  // "מוקפא" — a third state of the eshel field (beyond registeredEshel yes/no).
+  // Display + groups-export only; registeredEshel is preserved and all stats
+  // keep using it. frozenReason is an optional note on why.
+  frozen          Boolean  @default(false)
+  frozenReason    String?
 
   payments        Payment[]
 

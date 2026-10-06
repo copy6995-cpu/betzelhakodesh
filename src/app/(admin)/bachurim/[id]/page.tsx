@@ -121,7 +121,9 @@ export default async function BachurDetailPage({
       })
     : null;
   const seasonDate = seasonOption?.date ?? null;
-  const eshelValue = eshelActive
+  const eshelValue = student.frozen
+    ? "מוקפא"
+    : eshelActive
     ? "כן"
     : eshelLapsed
     ? "לא (פג תוקף)"
@@ -143,8 +145,13 @@ export default async function BachurDetailPage({
             {" / "}
             <span>{student.yeshiva}</span>
           </div>
-          <h1 className="text-3xl font-bold text-[var(--color-primary)] mt-1">
+          <h1 className="text-3xl font-bold text-[var(--color-primary)] mt-1 flex items-center gap-2 flex-wrap">
             {student.lastName} {student.firstName}
+            {student.frozen && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 align-middle">
+                מוקפא
+              </span>
+            )}
           </h1>
           <div className="text-[var(--color-muted-foreground)] mt-1">
             {student.fatherName && `בן ${student.fatherName}`}
@@ -153,6 +160,11 @@ export default async function BachurDetailPage({
               {student.personalCode}
             </span>
           </div>
+          {student.frozen && student.frozenReason && (
+            <div className="text-sm text-sky-700 mt-1">
+              סיבת הקפאה: {student.frozenReason}
+            </div>
+          )}
         </div>
         <div className="flex gap-2 items-start">
           <PromoteStudentButton

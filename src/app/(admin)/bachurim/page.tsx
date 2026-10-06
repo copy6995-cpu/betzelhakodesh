@@ -348,6 +348,11 @@ export default async function BachurimPage({
                       >
                         {s.lastName} {s.firstName}
                       </Link>
+                      {s.frozen && (
+                        <span className="ms-2 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700 align-middle">
+                          מוקפא
+                        </span>
+                      )}
                       <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
                         {s.fatherName && `בן ${s.fatherName}`}
                       </div>

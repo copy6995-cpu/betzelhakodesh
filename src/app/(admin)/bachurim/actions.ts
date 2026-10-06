@@ -37,6 +37,8 @@ type StudentPayload = {
   nedarimHook: string;
   endDateLabel: string;
   registeredEshel: boolean;
+  frozen?: boolean;
+  frozenReason?: string;
   notes: string;
   parent: {
     id?: string;
@@ -112,6 +114,10 @@ export async function updateStudent(payload: StudentPayload): Promise<void> {
       nedarimHook: nullIfEmpty(payload.nedarimHook),
       endDateLabel: nullIfEmpty(payload.endDateLabel),
       registeredEshel: payload.registeredEshel,
+      frozen: !!payload.frozen,
+      frozenReason: payload.frozen
+        ? nullIfEmpty(payload.frozenReason ?? "")
+        : null,
       notes: nullIfEmpty(payload.notes),
       parentId,
     },
