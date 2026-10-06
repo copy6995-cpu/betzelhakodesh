@@ -62,25 +62,33 @@ export default async function RoomsPage({
     sources,
   } = await resolveRegistrationSource(sp.source, "all");
 
-  const [rooms, yeshivot, allocations, allWeeks, demand] = await Promise.all([
-    prisma.room.findMany({
-      where: { active: true },
-      orderBy: [{ building: "asc" }, { order: "asc" }],
-    }),
-    prisma.yeshiva.findMany({
-      where: { active: true },
-      orderBy: { displayOrder: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.roomAllocation.findMany({ where: { weekKey } }),
-    prisma.roomAllocation.groupBy({
-      by: ["weekKey"],
-      _count: { _all: true },
-      orderBy: { weekKey: "desc" },
-      take: 8,
-    }),
-    loadRoomDemand(activeYear, fromDate, toDate, demandSource),
-  ]);
+  // Allocations across the whole demand range (not just the one assignment
+  // week) — include every week whose Sunday falls from the range's first
+  // Sunday through `to`, so the אגף columns line up with the registration range.
+  const rangeFrom = isoDate(sundayOf(fromDate));
+  const [rooms, yeshivot, allocations, rangeAllocations, allWeeks, demand] =
+    await Promise.all([
+      prisma.room.findMany({
+        where: { active: true },
+        orderBy: [{ building: "asc" }, { order: "asc" }],
+      }),
+      prisma.yeshiva.findMany({
+        where: { active: true },
+        orderBy: { displayOrder: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.roomAllocation.findMany({ where: { weekKey } }),
+      prisma.roomAllocation.findMany({
+        where: { weekKey: { gte: rangeFrom, lte: to } },
+      }),
+      prisma.roomAllocation.groupBy({
+        by: ["weekKey"],
+        _count: { _all: true },
+        orderBy: { weekKey: "desc" },
+        take: 8,
+      }),
+      loadRoomDemand(activeYear, fromDate, toDate, demandSource),
+    ]);
 
   // Group rooms by building for display.
   const buildings = new Map<string, typeof rooms>();
@@ -101,7 +109,6 @@ export default async function RoomsPage({
   // Allocated rooms + beds per yeshiva for the current week — linked rooms
   // (א300_1/_2, א403_1/_2) count as one room; beds sum their capacity.
   const roomById = new Map(rooms.map((r) => [r.id, r]));
-  const anyCapacity = rooms.some((r) => r.capacity != null);
   const allocatedByYeshiva: Record<string, { rooms: number; beds: number }> = {};
   const seenPhysical = new Map<string, Set<string>>(); // yeshiva -> physical codes
   for (const a of allocations) {
@@ -120,6 +127,28 @@ export default async function RoomsPage({
     }
     acc.beds += room.capacity ?? 0;
   }
+
+  // Beds allocated per (yeshiva, אגף/building) across the demand RANGE — for the
+  // per-אגף columns in the demand table. Linked rooms count once per week.
+  const allocByYeshiva: Record<string, Record<string, number>> = {};
+  const seenRange = new Set<string>(); // `${weekKey}|${yeshiva}|${physical}`
+  for (const a of rangeAllocations) {
+    const room = roomById.get(a.roomId);
+    if (!room) continue;
+    const rk = `${a.weekKey}|${a.yeshiva}|${physicalCode(room.code)}`;
+    if (seenRange.has(rk)) continue;
+    seenRange.add(rk);
+    const byB = (allocByYeshiva[a.yeshiva] ??= {});
+    byB[room.building] = (byB[room.building] ?? 0) + (room.capacity ?? 0);
+  }
+  // אגפים to show = buildings that have any allocation in the range, in the
+  // rooms' natural (building-sorted) order.
+  const withAlloc = new Set<string>();
+  for (const b of Object.values(allocByYeshiva))
+    for (const name of Object.keys(b)) withAlloc.add(name);
+  const demandBuildings = [...new Set(rooms.map((r) => r.building))].filter((b) =>
+    withAlloc.has(b)
+  );
 
   const unassignedCount = rooms.length - allocations.length;
 
@@ -196,8 +225,8 @@ export default async function RoomsPage({
       <RoomDemandSummary
         rows={demand.rows}
         totals={demand.totals}
-        allocatedByYeshiva={allocatedByYeshiva}
-        anyCapacity={anyCapacity}
+        buildings={demandBuildings}
+        allocByYeshiva={allocByYeshiva}
         rangeLabel={rangeLabel}
       />
 
