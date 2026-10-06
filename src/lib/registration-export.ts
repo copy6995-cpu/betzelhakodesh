@@ -13,6 +13,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
 import { getActiveYear } from "./year";
 import { loadCancellations, isLiveBooking } from "./bed-cancellations";
+import { compareRoster } from "./roster-sort";
 
 export type SubmissionRow = Record<string, string | number | null>;
 
@@ -221,6 +222,26 @@ export async function loadRegistrationsByYeshiva(opts: {
     const arr = groups.get(yeshiva) ?? [];
     arr.push(row);
     groups.set(yeshiva, arr);
+  }
+
+  // Order within each yeshiva: חו״ל → אר״י → shiur → last → first name.
+  for (const arr of groups.values()) {
+    arr.sort((a, b) =>
+      compareRoster(
+        {
+          ariChul: a['חו"ל/אר"י'] as string,
+          shiur: a["שיעור"] as string,
+          lastName: String(a["שם משפחה"] ?? ""),
+          firstName: String(a["שם פרטי"] ?? ""),
+        },
+        {
+          ariChul: b['חו"ל/אר"י'] as string,
+          shiur: b["שיעור"] as string,
+          lastName: String(b["שם משפחה"] ?? ""),
+          firstName: String(b["שם פרטי"] ?? ""),
+        }
+      )
+    );
   }
 
   return {

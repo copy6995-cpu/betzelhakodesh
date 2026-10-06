@@ -15,6 +15,7 @@ import {
   isEshelActive,
 } from "./eshel";
 import { tokenSearchWhere } from "./search";
+import { compareRoster } from "./roster-sort";
 
 export type BachurimExportRow = {
   firstName: string;
@@ -54,9 +55,36 @@ const YESHIVA_GROUP: Record<string, number> = {
   "קריית הרצוג": 18,
 };
 
-function groupFor(yeshiva: string, eshel: boolean): number | "" {
-  if (!eshel) return 23;
-  return YESHIVA_GROUP[yeshiva.trim()] ?? "";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The Yemot groups-export status for one bachur — מאושר (1/2), the ישיבה to
+ * write, and the קבוצה. Precedence:
+ *   מוקפא            → 2 · ישיבה אמיתית · 23
+ *   ישיבה = ארכיון    → 2 · ארכיון · 23
+ *   עברו 60 יום מה"עד מתי" → 2 · ארכיון · 23
+ *   תוך 60 יום (חסד)  → 1 · ישיבה אמיתית · 25
+ *   אש״ל פעיל         → 1 · ישיבה אמיתית · מספר הישיבה
+ *   לא רשום אש״ל      → 1 · ישיבה אמיתית · 23
+ */
+function exportGroupInfo(o: {
+  yeshiva: string;
+  eshel: boolean;
+  frozen: boolean;
+  endDate: Date | null;
+  now: Date;
+}): { approved: number; yeshiva: string; group: number | "" } {
+  const y = o.yeshiva.trim();
+  if (o.frozen) return { approved: 2, yeshiva: o.yeshiva, group: 23 };
+  if (y === "ארכיון") return { approved: 2, yeshiva: "ארכיון", group: 23 };
+  if (o.endDate) {
+    const days = (o.now.getTime() - o.endDate.getTime()) / DAY_MS;
+    if (days > 60) return { approved: 2, yeshiva: "ארכיון", group: 23 };
+    if (days > 0) return { approved: 1, yeshiva: o.yeshiva, group: 25 };
+  }
+  if (o.eshel)
+    return { approved: 1, yeshiva: o.yeshiva, group: YESHIVA_GROUP[y] ?? "" };
+  return { approved: 1, yeshiva: o.yeshiva, group: 23 };
 }
 
 const COLUMNS: Array<{ header: string; key: keyof BachurimExportRow }> = [
@@ -208,6 +236,15 @@ export async function loadBachurimForExport(opts: {
   byYeshiva: Map<string, BachurimExportRow[]>;
 }> {
   const expired = await getExpiredEndDateLabels(opts.year);
+  // Season end dates (for the groups export's 60-day → group-25 → archive rule).
+  const endDateOptions = await prisma.endDateOption.findMany({
+    where: { year: opts.year },
+    select: { label: true, date: true },
+  });
+  const labelDate = new Map(
+    endDateOptions.filter((o) => o.date).map((o) => [o.label, o.date as Date])
+  );
+  const now = new Date();
   // statusWhere and the search can each contribute an `OR` — keep them in
   // separate AND slots so neither key overwrites the other.
   const where: Record<string, unknown> = {
@@ -248,12 +285,20 @@ export async function loadBachurimForExport(opts: {
     const price = s.price ?? 0;
     const eshel = isEshelActive(s.registeredEshel, s.endDateLabel, expired);
     const fatherName = s.fatherName ?? "";
-    const group = groupFor(s.yeshiva, eshel);
+    const gi = exportGroupInfo({
+      yeshiva: s.yeshiva,
+      eshel,
+      frozen: s.frozen,
+      endDate: s.endDateLabel ? labelDate.get(s.endDateLabel) ?? null : null,
+      now,
+    });
+    const group = gi.group;
     // The Yemot upload template as one comma-joined line (5 blank spacer cols
     // between last name and father name), so it can be copied as a single cell.
+    // מאושר + ישיבה follow the groups rules (2/ארכיון for frozen/archive/aged).
     const groupLine = [
       s.personalCode,
-      1,
+      gi.approved,
       s.firstName,
       s.lastName,
       "",
@@ -264,7 +309,7 @@ export async function loadBachurimForExport(opts: {
       fatherName,
       s.city ?? "",
       s.shiur ?? "",
-      s.yeshiva,
+      gi.yeshiva,
       s.ariChul ?? "",
       group,
     ].join(",");
@@ -289,6 +334,11 @@ export async function loadBachurimForExport(opts: {
       groupLine,
     };
   });
+
+  // Order within each yeshiva: חו״ל → אר״י → shiur → last → first name.
+  rows.sort(
+    (a, b) => a.yeshiva.localeCompare(b.yeshiva, "he") || compareRoster(a, b)
+  );
 
   const byYeshiva = new Map<string, BachurimExportRow[]>();
   for (const r of rows) {
