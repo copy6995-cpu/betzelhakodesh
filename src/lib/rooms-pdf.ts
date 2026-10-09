@@ -10,7 +10,7 @@
 import * as fs from "fs";
 import { prisma } from "./prisma";
 import { mergeRoomUnits, type RoomUnit } from "./rooms";
-import { complexOf } from "./room-complex";
+import { complexWingHeader, buildingRank } from "./room-complex";
 import { orderCalendarYeshivot } from "./calendar-export";
 import { weekLabel } from "./weeks";
 
@@ -57,46 +57,35 @@ export async function buildRoomsPdfHtml(opts: {
     include: { room: true },
   });
 
-  // Group by yeshiva → מתחם (complex), merging the אגפים that share a מתחם.
-  const rawByYC = new Map<
+  // Group by yeshiva → אגף (Room.building), collapsing linked rooms into units.
+  const rawByYB = new Map<
     string,
-    Map<
-      string,
-      { id: string; code: string; capacity: number | null; order: number; building: string }[]
-    >
+    Map<string, { id: string; code: string; capacity: number | null; order: number }[]>
   >();
   for (const a of allocations) {
-    const complex = complexOf(a.room.building);
-    const yc = rawByYC.get(a.yeshiva) ?? new Map();
-    const arr = yc.get(complex) ?? [];
+    const yb = rawByYB.get(a.yeshiva) ?? new Map();
+    const arr = yb.get(a.room.building) ?? [];
     arr.push({
       id: a.roomId,
       code: a.room.code,
       capacity: a.room.capacity,
       order: a.room.order,
-      building: a.room.building,
     });
-    yc.set(complex, arr);
-    rawByYC.set(a.yeshiva, yc);
+    yb.set(a.room.building, arr);
+    rawByYB.set(a.yeshiva, yb);
   }
 
   const byYeshiva = new Map<string, Map<string, RoomUnit[]>>();
-  for (const [yeshiva, yc] of rawByYC) {
-    const complexes = new Map<string, RoomUnit[]>();
-    for (const [complex, rooms] of yc) {
-      // Keep each אגף's rooms contiguous within the מתחם (order is per-אגף).
-      rooms.sort(
-        (x, y) =>
-          x.building.localeCompare(y.building, "he") ||
-          x.order - y.order ||
-          x.code.localeCompare(y.code, "he")
-      );
-      complexes.set(
-        complex,
+  for (const [yeshiva, yb] of rawByYB) {
+    const buildings = new Map<string, RoomUnit[]>();
+    for (const [building, rooms] of yb) {
+      rooms.sort((x, y) => x.order - y.order || x.code.localeCompare(y.code, "he"));
+      buildings.set(
+        building,
         mergeRoomUnits(rooms.map((r) => ({ ...r, assignedTo: yeshiva })))
       );
     }
-    byYeshiva.set(yeshiva, complexes);
+    byYeshiva.set(yeshiva, buildings);
   }
 
   const names = [...byYeshiva.keys()];
@@ -108,31 +97,46 @@ export async function buildRoomsPdfHtml(opts: {
   const inScope = new Set(yeshivaOrder);
   const anyCapacity = allocations.some((a) => a.room.capacity != null);
 
-  // One page per מתחם, titled with the מתחם name only (the yeshiva is implied —
-  // this is that yeshiva's export). A yeshiva's אגפים that share a מתחם are
-  // merged onto the one page.
+  // Flowing layout: a section per ישיבה (several fit on a page), and inside it
+  // one block per אגף headed "[מתחם] - [אגף]" (e.g. ביהמ"ד - קומה 3), ordered by
+  // the physical אגף order.
   const sections = yeshivaOrder
-    .flatMap((yeshiva) => {
-      const complexes = byYeshiva.get(yeshiva)!;
-      return [...complexes.entries()].map(([complex, units]) => {
-        const beds = units.reduce((m, u) => m + (u.capacity ?? 0), 0);
-        const chips = units
-          .map(
-            (u) =>
-              `<span class="chip"><bdi>${esc(u.code)}</bdi>${
-                anyCapacity && u.capacity != null
-                  ? `<small>${u.capacity}</small>`
-                  : ""
-              }</span>`
-          )
-          .join("");
-        return `<section class="page">
-        <div class="y-head"><h2>${esc(complex)}</h2><span class="muted">${
-          label ? esc(label) + " · " : ""
-        }${units.length} חדרים${anyCapacity ? ` · ${beds} מיטות` : ""}</span></div>
-        <div class="chips">${chips}</div>
+    .map((yeshiva) => {
+      const buildings = byYeshiva.get(yeshiva)!;
+      const entries = [...buildings.entries()].sort(
+        (a, b) =>
+          buildingRank(a[0]) - buildingRank(b[0]) ||
+          a[0].localeCompare(b[0], "he")
+      );
+      let rooms = 0;
+      let beds = 0;
+      for (const [, units] of entries) {
+        rooms += units.length;
+        for (const u of units) beds += u.capacity ?? 0;
+      }
+      const wings = entries
+        .map(([building, units]) => {
+          const chips = units
+            .map(
+              (u) =>
+                `<span class="chip"><bdi>${esc(u.code)}</bdi>${
+                  anyCapacity && u.capacity != null
+                    ? `<small>${u.capacity}</small>`
+                    : ""
+                }</span>`
+            )
+            .join("");
+          return `<div class="wing"><div class="wing-h">${esc(
+            complexWingHeader(building)
+          )} <span class="muted">(${units.length})</span></div><div class="chips">${chips}</div></div>`;
+        })
+        .join("");
+      return `<section class="yeshiva">
+        <div class="y-head"><h2>${esc(yeshiva)}</h2><span class="muted">${
+        label ? esc(label) + " · " : ""
+      }${rooms} חדרים${anyCapacity ? ` · ${beds} מיטות` : ""}</span></div>
+        ${wings}
       </section>`;
-      });
     })
     .join("");
 
@@ -142,12 +146,12 @@ export async function buildRoomsPdfHtml(opts: {
   * { box-sizing: border-box; }
   body { font-family: Arial, "Segoe UI", sans-serif; margin: 0; color: #1a1a1a; }
   @page { size: A4; margin: 1.2cm; }
-  /* One מתחם per page: each starts on a fresh page (the first avoids a leading
-     blank page), and never splits across a page break. */
-  .page { break-before: page; break-inside: avoid; margin-bottom: 16px; }
-  .page:first-of-type { break-before: avoid; }
+  /* Flowing layout — several ישיבות can share a page. Keep a ישיבה's header
+     with its first אגף, and never split an אגף block across a page. */
+  .yeshiva { margin-bottom: 18px; }
   .y-head { display: flex; align-items: baseline; justify-content: space-between;
-            border-bottom: 2px solid #0f2942; padding-bottom: 4px; margin: 0 0 8px; }
+            border-bottom: 2px solid #0f2942; padding-bottom: 4px; margin: 0 0 8px;
+            break-after: avoid; }
   h2 { color: #0f2942; font-size: 20px; margin: 0; }
   .muted { color: #6b7280; font-size: 12px; }
   .wing { margin-bottom: 10px; break-inside: avoid; }
