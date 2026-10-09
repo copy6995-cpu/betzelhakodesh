@@ -21,7 +21,7 @@ import * as fs from "fs";
 import * as path from "path";
 import JSZip from "jszip";
 import { prisma } from "./prisma";
-import { complexOf } from "./room-complex";
+import { complexWingHeader } from "./room-complex";
 
 const TEMPLATE_PATH = path.join(process.cwd(), "data", "rooms-template.xlsx");
 const RANGES_PATH = path.join(process.cwd(), "data", "room-ranges.json");
@@ -391,18 +391,18 @@ export async function exportRoomsPerYeshiva(opts: {
         /(<pageSetup\b[^>]*?)\s+r:id="[^"]*"/g,
         "$1"
       );
-      // Print header/title = the מתחם name only (no yeshiva). Each template
-      // sheet is one אגף; several אגפים can share a מתחם (e.g. בית מלכה3/4 →
-      // "בית מלכה"), so sheets of the same מתחם get the same title.
+      // Print header = "[מתחם] - [אגף]" (no yeshiva — this is that yeshiva's
+      // file). Each template sheet is one אגף, so its header names both the
+      // מתחם and the אגף, e.g. "ביהמ"ד - קומה 3" / "בית מלכה - בניין 4".
       const label = (opts.label ?? "").trim();
       const bldHere = bldBySheet.get(yeshiva)?.get(sheetName);
-      const complexLabel =
+      const headerLabel =
         bldHere && bldHere.size > 0
-          ? [...new Set([...bldHere].map(complexOf))].join(" / ")
-          : complexOf(sheetName);
+          ? [...new Set([...bldHere].map(complexWingHeader))].join(" / ")
+          : complexWingHeader(sheetName);
       xml = injectPrintHeader(
         xml,
-        `${complexLabel}${label ? ` · ${label}` : ""}`
+        `${headerLabel}${label ? ` · ${label}` : ""}`
       );
       zip.file(filePath, xml);
     }

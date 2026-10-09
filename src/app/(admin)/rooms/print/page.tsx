@@ -1,16 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { weekKeyOf, currentWeekKey, weekLabel } from "@/lib/weeks";
 import { mergeRoomUnits, type RoomUnit } from "@/lib/rooms";
-import { complexOf } from "@/lib/room-complex";
+import { complexWingHeader, buildingRank } from "@/lib/room-complex";
 import { orderCalendarYeshivot } from "@/lib/calendar-export";
 import { PrintControls } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Print-optimized room-assignment report, one מתחם per page, each headed with
- * the מתחם name (the yeshiva is implied — this is that yeshiva's report). A
- * מתחם's אגפים are merged onto its page. Rendered as HTML so the browser's
+ * Print-optimized room-assignment report — matches the PDF: a flowing section
+ * per ישיבה (several fit on a page), and inside it one block per אגף headed
+ * "[מתחם] - [אגף]" (e.g. ביהמ"ד - קומה 3). Rendered as HTML so the browser's
  * "Save as PDF" handles Hebrew RTL perfectly; a visibility trick isolates it
  * from the admin chrome when printing.
  */
@@ -30,60 +30,54 @@ export default async function RoomsPrintPage({
     include: { room: true },
   });
 
-  // yeshiva → מתחם → rooms (raw), merging the אגפים that share a מתחם, then
-  // collapse linked rooms into units.
+  // yeshiva → אגף (Room.building) → rooms (raw), then collapse linked rooms.
   const byYeshiva = new Map<string, Map<string, RoomUnit[]>>();
-  const rawByYC = new Map<
+  const rawByYB = new Map<
     string,
-    Map<
-      string,
-      { id: string; code: string; capacity: number | null; order: number; building: string }[]
-    >
+    Map<string, { id: string; code: string; capacity: number | null; order: number }[]>
   >();
   for (const a of allocations) {
-    const complex = complexOf(a.room.building);
-    const yc = rawByYC.get(a.yeshiva) ?? new Map();
-    const arr = yc.get(complex) ?? [];
+    const yb = rawByYB.get(a.yeshiva) ?? new Map();
+    const arr = yb.get(a.room.building) ?? [];
     arr.push({
       id: a.roomId,
       code: a.room.code,
       capacity: a.room.capacity,
       order: a.room.order,
-      building: a.room.building,
     });
-    yc.set(complex, arr);
-    rawByYC.set(a.yeshiva, yc);
+    yb.set(a.room.building, arr);
+    rawByYB.set(a.yeshiva, yb);
   }
-  for (const [yeshiva, yc] of rawByYC) {
-    const complexes = new Map<string, RoomUnit[]>();
-    for (const [complex, rooms] of yc) {
-      // Keep each אגף's rooms contiguous within the מתחם (order is per-אגף).
-      rooms.sort(
-        (x, y) =>
-          x.building.localeCompare(y.building, "he") ||
-          x.order - y.order ||
-          x.code.localeCompare(y.code, "he")
-      );
-      complexes.set(
-        complex,
+  for (const [yeshiva, yb] of rawByYB) {
+    const buildings = new Map<string, RoomUnit[]>();
+    for (const [building, rooms] of yb) {
+      rooms.sort((x, y) => x.order - y.order || x.code.localeCompare(y.code, "he"));
+      buildings.set(
+        building,
         mergeRoomUnits(rooms.map((r) => ({ ...r, assignedTo: yeshiva })))
       );
     }
-    byYeshiva.set(yeshiva, complexes);
+    byYeshiva.set(yeshiva, buildings);
   }
 
   const names = [...byYeshiva.keys()];
   const ordered = orderCalendarYeshivot(names);
   const yeshivaOrder = [...ordered, ...names.filter((n) => !ordered.includes(n))];
 
-  // One page per מתחם, titled with the מתחם name only.
-  const pages: { yeshiva: string; complex: string; units: RoomUnit[] }[] = [];
-  for (const yeshiva of yeshivaOrder) {
-    const complexes = byYeshiva.get(yeshiva)!;
-    for (const [complex, units] of complexes) {
-      pages.push({ yeshiva, complex, units });
-    }
-  }
+  // Per ישיבה: its אגפים in physical order, each a block headed "[מתחם] - [אגף]".
+  const sections = yeshivaOrder.map((yeshiva) => {
+    const buildings = byYeshiva.get(yeshiva)!;
+    const entries = [...buildings.entries()].sort(
+      (a, b) =>
+        buildingRank(a[0]) - buildingRank(b[0]) || a[0].localeCompare(b[0], "he")
+    );
+    const rooms = entries.reduce((n, [, u]) => n + u.length, 0);
+    const beds = entries.reduce(
+      (n, [, u]) => n + u.reduce((m, x) => m + (x.capacity ?? 0), 0),
+      0
+    );
+    return { yeshiva, entries, rooms, beds };
+  });
 
   const anyCapacity = allocations.some((a) => a.room.capacity != null);
   const title = `חלוקת חדרים${label ? ` — ${label}` : ""}`;
@@ -97,8 +91,10 @@ export default async function RoomsPrintPage({
           .print-root, .print-root * { visibility: visible; }
           .print-root { position: absolute; inset: 0; margin: 0; }
           .no-print { display: none !important; }
-          .yeshiva-page { page-break-before: always; }
-          .yeshiva-page:first-of-type { page-break-before: avoid; }
+          /* Flow several ישיבות per page; keep each אגף block whole and its
+             ישיבה header attached to what follows. */
+          .wing { break-inside: avoid; }
+          .y-head { break-after: avoid; }
         }
       `}</style>
 
@@ -121,38 +117,48 @@ export default async function RoomsPrintPage({
         </p>
       ) : (
         <div className="space-y-8">
-          {pages.map(({ yeshiva, complex, units }) => {
-            const bedCount = units.reduce((m, u) => m + (u.capacity ?? 0), 0);
-            return (
-              <section key={`${yeshiva}|${complex}`} className="yeshiva-page">
-                <div className="flex items-baseline justify-between border-b-2 border-[var(--color-primary)] pb-1 mb-3">
-                  <h2 className="text-xl font-bold text-[var(--color-primary)]">
-                    {complex}
-                  </h2>
-                  <span className="text-sm text-[var(--color-muted-foreground)]">
-                    {label ? `${label} · ` : ""}
-                    {units.length} חדרים
-                    {anyCapacity ? ` · ${bedCount} מיטות` : ""}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {units.map((u) => (
-                    <span
-                      key={u.key}
-                      className="inline-flex items-center gap-1 border border-[var(--color-border)] rounded px-2 py-0.5 text-sm font-mono"
-                    >
-                      {u.code}
-                      {anyCapacity && u.capacity != null && (
-                        <span className="text-[10px] text-[var(--color-muted-foreground)]">
-                          {u.capacity}
+          {sections.map(({ yeshiva, entries, rooms, beds }) => (
+            <section key={yeshiva} className="yeshiva">
+              <div className="y-head flex items-baseline justify-between border-b-2 border-[var(--color-primary)] pb-1 mb-3">
+                <h2 className="text-xl font-bold text-[var(--color-primary)]">
+                  {yeshiva}
+                </h2>
+                <span className="text-sm text-[var(--color-muted-foreground)]">
+                  {label ? `${label} · ` : ""}
+                  {rooms} חדרים
+                  {anyCapacity ? ` · ${beds} מיטות` : ""}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {entries.map(([building, units]) => (
+                  <div key={building} className="wing">
+                    <div className="wing-h font-semibold text-sm mb-1 text-[var(--color-primary)]">
+                      {complexWingHeader(building)}
+                      <span className="font-normal text-[var(--color-muted-foreground)]">
+                        {" "}
+                        ({units.length})
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {units.map((u) => (
+                        <span
+                          key={u.key}
+                          className="inline-flex items-center gap-1 border border-[var(--color-border)] rounded px-2 py-0.5 text-sm font-mono"
+                        >
+                          {u.code}
+                          {anyCapacity && u.capacity != null && (
+                            <span className="text-[10px] text-[var(--color-muted-foreground)]">
+                              {u.capacity}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>
