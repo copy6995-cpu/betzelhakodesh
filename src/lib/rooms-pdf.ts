@@ -10,6 +10,7 @@
 import * as fs from "fs";
 import { prisma } from "./prisma";
 import { mergeRoomUnits, type RoomUnit } from "./rooms";
+import { complexOf } from "./room-complex";
 import { orderCalendarYeshivot } from "./calendar-export";
 import { weekLabel } from "./weeks";
 
@@ -56,34 +57,46 @@ export async function buildRoomsPdfHtml(opts: {
     include: { room: true },
   });
 
-  const rawByYB = new Map<
+  // Group by yeshiva → מתחם (complex), merging the אגפים that share a מתחם.
+  const rawByYC = new Map<
     string,
-    Map<string, { id: string; code: string; capacity: number | null; order: number }[]>
+    Map<
+      string,
+      { id: string; code: string; capacity: number | null; order: number; building: string }[]
+    >
   >();
   for (const a of allocations) {
-    const yb = rawByYB.get(a.yeshiva) ?? new Map();
-    const arr = yb.get(a.room.building) ?? [];
+    const complex = complexOf(a.room.building);
+    const yc = rawByYC.get(a.yeshiva) ?? new Map();
+    const arr = yc.get(complex) ?? [];
     arr.push({
       id: a.roomId,
       code: a.room.code,
       capacity: a.room.capacity,
       order: a.room.order,
+      building: a.room.building,
     });
-    yb.set(a.room.building, arr);
-    rawByYB.set(a.yeshiva, yb);
+    yc.set(complex, arr);
+    rawByYC.set(a.yeshiva, yc);
   }
 
   const byYeshiva = new Map<string, Map<string, RoomUnit[]>>();
-  for (const [yeshiva, yb] of rawByYB) {
-    const buildings = new Map<string, RoomUnit[]>();
-    for (const [building, rooms] of yb) {
-      rooms.sort((x, y) => x.order - y.order || x.code.localeCompare(y.code, "he"));
-      buildings.set(
-        building,
+  for (const [yeshiva, yc] of rawByYC) {
+    const complexes = new Map<string, RoomUnit[]>();
+    for (const [complex, rooms] of yc) {
+      // Keep each אגף's rooms contiguous within the מתחם (order is per-אגף).
+      rooms.sort(
+        (x, y) =>
+          x.building.localeCompare(y.building, "he") ||
+          x.order - y.order ||
+          x.code.localeCompare(y.code, "he")
+      );
+      complexes.set(
+        complex,
         mergeRoomUnits(rooms.map((r) => ({ ...r, assignedTo: yeshiva })))
       );
     }
-    byYeshiva.set(yeshiva, buildings);
+    byYeshiva.set(yeshiva, complexes);
   }
 
   const names = [...byYeshiva.keys()];
@@ -95,12 +108,13 @@ export async function buildRoomsPdfHtml(opts: {
   const inScope = new Set(yeshivaOrder);
   const anyCapacity = allocations.some((a) => a.room.capacity != null);
 
-  // One page per מתחם (building): a yeshiva that occupies several מתחמים is
-  // split so each prints on its own page, titled "[מתחם] - [ישיבה]".
+  // One page per מתחם, titled with the מתחם name only (the yeshiva is implied —
+  // this is that yeshiva's export). A yeshiva's אגפים that share a מתחם are
+  // merged onto the one page.
   const sections = yeshivaOrder
     .flatMap((yeshiva) => {
-      const buildings = byYeshiva.get(yeshiva)!;
-      return [...buildings.entries()].map(([building, units]) => {
+      const complexes = byYeshiva.get(yeshiva)!;
+      return [...complexes.entries()].map(([complex, units]) => {
         const beds = units.reduce((m, u) => m + (u.capacity ?? 0), 0);
         const chips = units
           .map(
@@ -113,7 +127,7 @@ export async function buildRoomsPdfHtml(opts: {
           )
           .join("");
         return `<section class="page">
-        <div class="y-head"><h2>${esc(building)} - ${esc(yeshiva)}</h2><span class="muted">${
+        <div class="y-head"><h2>${esc(complex)}</h2><span class="muted">${
           label ? esc(label) + " · " : ""
         }${units.length} חדרים${anyCapacity ? ` · ${beds} מיטות` : ""}</span></div>
         <div class="chips">${chips}</div>
