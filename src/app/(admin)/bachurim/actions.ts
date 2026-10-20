@@ -40,6 +40,7 @@ type StudentPayload = {
   frozen?: boolean;
   frozenReason?: string;
   notes: string;
+  debts?: { year: string; amount: number; note?: string }[];
   parent: {
     id?: string;
     firstName: string;
@@ -122,6 +123,24 @@ export async function updateStudent(payload: StudentPayload): Promise<void> {
       parentId,
     },
   });
+  // Debts are edited as a whole list — replace this student's rows.
+  if (payload.debts) {
+    const sid = payload.id;
+    await prisma.studentDebt.deleteMany({ where: { studentId: sid } });
+    const valid = payload.debts.filter(
+      (d) => d.year.trim() && (d.amount || 0) > 0
+    );
+    if (valid.length) {
+      await prisma.studentDebt.createMany({
+        data: valid.map((d) => ({
+          studentId: sid,
+          year: d.year.trim(),
+          amount: Math.max(0, Math.floor(d.amount || 0)),
+          note: d.note?.trim() || null,
+        })),
+      });
+    }
+  }
   revalidatePath(`/bachurim/${payload.id}`);
   revalidatePath("/bachurim");
 }

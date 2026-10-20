@@ -22,6 +22,7 @@ type StudentFields = {
   frozen: boolean;
   frozenReason: string;
   notes: string;
+  debts: { year: string; amount: number; note: string }[];
   parent: {
     id: string;
     firstName: string;
@@ -36,10 +37,12 @@ export function BachurEditForm({
   student,
   yeshivot,
   shiurim,
+  yearOptions,
 }: {
   student: StudentFields;
   yeshivot: string[];
   shiurim: string[];
+  yearOptions: string[];
 }) {
   const router = useRouter();
   const [f, setF] = useState(student);
@@ -54,6 +57,32 @@ export function BachurEditForm({
     v: StudentFields["parent"][K]
   ) {
     setF((prev) => ({ ...prev, parent: { ...prev.parent, [k]: v } }));
+  }
+
+  function addDebt() {
+    setF((prev) => ({
+      ...prev,
+      debts: [
+        ...prev.debts,
+        { year: yearOptions[0] ?? "", amount: 0, note: "" },
+      ],
+    }));
+  }
+  function updateDebt(
+    i: number,
+    k: keyof StudentFields["debts"][number],
+    v: string | number
+  ) {
+    setF((prev) => ({
+      ...prev,
+      debts: prev.debts.map((d, idx) => (idx === i ? { ...d, [k]: v } : d)),
+    }));
+  }
+  function removeDebt(i: number) {
+    setF((prev) => ({
+      ...prev,
+      debts: prev.debts.filter((_, idx) => idx !== i),
+    }));
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -158,6 +187,74 @@ export function BachurEditForm({
             <Input value={f.endDateLabel} onChange={(v) => set("endDateLabel", v)} />
           </Field>
         </Grid>
+      </Section>
+
+      <Section title="חובות">
+        <p className="text-xs text-[var(--color-muted-foreground)] mb-3">
+          חובות משנים קודמות. התשלומים נסגרים קודם על החובות (מהישן לחדש) ואז על
+          השנתי.
+        </p>
+        <div className="space-y-2">
+          {f.debts.map((d, i) => (
+            <div
+              key={i}
+              className="flex flex-wrap items-end gap-2 bg-[var(--color-muted)]/40 rounded-lg p-2"
+            >
+              <div className="w-28">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                  שנה
+                </span>
+                <div className="mt-1">
+                  <Select
+                    value={d.year}
+                    onChange={(v) => updateDebt(i, "year", v)}
+                    options={yearOptions.length ? yearOptions : [d.year]}
+                  />
+                </div>
+              </div>
+              <div className="w-28">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                  סכום (₪)
+                </span>
+                <div className="mt-1">
+                  <Input
+                    type="number"
+                    value={d.amount ? String(d.amount) : ""}
+                    onChange={(v) =>
+                      updateDebt(i, "amount", v ? parseInt(v, 10) : 0)
+                    }
+                  />
+                </div>
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                  הערה
+                </span>
+                <div className="mt-1">
+                  <Input
+                    value={d.note}
+                    onChange={(v) => updateDebt(i, "note", v)}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeDebt(i)}
+                className="h-10 px-3 text-red-500 hover:text-red-700"
+                title="הסר"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addDebt}
+            className="h-9 px-4 rounded-lg border border-[var(--color-border)] text-sm hover:bg-[var(--color-muted)]"
+          >
+            + הוסף שורת חוב
+          </button>
+        </div>
       </Section>
 
       <Section title="פרטי ההורה">

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatILS, formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
 import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
+import { settleDebts } from "@/lib/debts";
 import { DeleteStudentButton } from "./delete-button";
 import { DeletePaymentButton } from "./delete-payment-button";
 import { PromoteStudentButton } from "./promote-button";
@@ -22,6 +23,7 @@ export default async function BachurDetailPage({
     include: {
       parent: { include: { students: { select: { id: true, year: true, firstName: true, lastName: true, personalCode: true } } } },
       payments: { orderBy: { paymentNumber: "asc" } },
+      debts: { orderBy: { year: "asc" } },
     },
   });
 
@@ -29,7 +31,13 @@ export default async function BachurDetailPage({
 
   const paid = student.payments.reduce((a, p) => a + Number(p.amount), 0);
   const price = student.price ?? 0;
-  const remaining = price - paid;
+  // יתרה includes prior-year debts (paid settles debts oldest-first, then annual).
+  const settle = settleDebts(
+    student.debts.map((d) => ({ id: d.id, year: d.year, amount: d.amount, note: d.note })),
+    price,
+    paid
+  );
+  const remaining = settle.balance;
 
   // Suggested target years for the promote button: every year we already
   // know about from other students. The button always shows now — the
@@ -539,6 +547,13 @@ export default async function BachurDetailPage({
             </h2>
             <div className="space-y-3">
               <KV label="מחיר" value={formatILS(price)} />
+              {settle.totalDebts > 0 && (
+                <KV
+                  label="חובות"
+                  value={formatILS(settle.totalDebts)}
+                  tone="warning"
+                />
+              )}
               <KV label="שולם" value={formatILS(paid)} tone="success" />
               <KV
                 label="יתרה"
@@ -547,6 +562,34 @@ export default async function BachurDetailPage({
                 bold
               />
             </div>
+            {settle.debts.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1.5">
+                <div className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                  חובות לפי שנים
+                </div>
+                {settle.debts.map((d) => (
+                  <div
+                    key={d.id ?? d.year}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <span className="font-medium">{d.year}</span>
+                    <span>
+                      {d.remaining > 0 ? (
+                        <span className="text-[var(--color-accent)] font-semibold">
+                          נשאר {formatILS(d.remaining)}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--color-success)]">שולם ✓</span>
+                      )}
+                      <span className="text-[var(--color-muted-foreground)]">
+                        {" "}
+                        / {formatILS(d.amount)}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {bedReservations.length > 0 && (

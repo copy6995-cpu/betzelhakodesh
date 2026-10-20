@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { END_DATE_SEASONS } from "@/lib/eshel";
+import { settleDebts } from "@/lib/debts";
 
 export async function setActiveYear(year: string): Promise<void> {
   if (!year) throw new Error("שנה ריקה");
@@ -154,7 +155,10 @@ export async function promoteToYear(
   if (!sourceYear || !targetYear) throw new Error("שנה חסרה");
   if (sourceYear === targetYear) throw new Error("שנה מקור וזהות");
 
-  const source = await prisma.student.findMany({ where: { year: sourceYear } });
+  const source = await prisma.student.findMany({
+    where: { year: sourceYear },
+    include: { debts: true, payments: { select: { amount: true } } },
+  });
   const existingCodesForTarget = new Set(
     (
       await prisma.student.findMany({
@@ -174,7 +178,7 @@ export async function promoteToYear(
     // ט stays at ט (see SHIUR_NEXT). null shiur stays null.
     const nextShiur = s.shiur ? SHIUR_NEXT[s.shiur] ?? s.shiur : null;
 
-    await prisma.student.create({
+    const createdStudent = await prisma.student.create({
       data: {
         year: targetYear,
         personalCode: s.personalCode,
@@ -199,6 +203,33 @@ export async function promoteToYear(
       },
     });
     created++;
+
+    // Carry forward any outstanding balance as debts on the new record: still-
+    // open prior debts keep their year; the source year's own unpaid remainder
+    // becomes a new debt row labelled with the source year.
+    const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
+    const st = settleDebts(
+      s.debts.map((d) => ({ year: d.year, amount: d.amount })),
+      s.price ?? 0,
+      paid
+    );
+    const carried: { year: string; amount: number }[] = [];
+    for (const d of st.debts) {
+      if (d.remaining > 0) carried.push({ year: d.year, amount: d.remaining });
+    }
+    if (st.annualRemaining > 0) {
+      carried.push({ year: sourceYear, amount: Math.round(st.annualRemaining) });
+    }
+    if (carried.length) {
+      await prisma.studentDebt.createMany({
+        data: carried.map((c) => ({
+          studentId: createdStudent.id,
+          year: c.year,
+          amount: Math.max(0, Math.floor(c.amount)),
+          note: null,
+        })),
+      });
+    }
   }
 
   revalidatePath("/bachurim");

@@ -115,7 +115,7 @@ export default async function PaymentsPage({
             href="/payments/prior-years"
             className="inline-flex items-center px-4 h-10 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"
           >
-            גביית שנים קודמות
+            חובות
           </Link>
           <SyncPaymentsButton />
         </div>

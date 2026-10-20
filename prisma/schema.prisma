@@ -84,6 +84,7 @@ model Student {
   frozenReason    String?
 
   payments        Payment[]
+  debts           StudentDebt[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -93,6 +94,22 @@ model Student {
   @@index([parentId])
   @@index([year, shiur])
   @@index([year, lastName, firstName])
+}
+
+/// An open debt a bachur carries from an earlier year (תשפ"ד/תשפ"ה/…). Amounts
+/// are entered manually (and auto-created on year promotion from a leftover
+/// balance). Incoming payments settle debts oldest-year-first, then the annual.
+model StudentDebt {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  year      String // the year the debt originates from
+  amount    Int      @default(0)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
 }
 
 model Payment {
