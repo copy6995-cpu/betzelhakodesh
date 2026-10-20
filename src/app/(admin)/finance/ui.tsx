@@ -215,6 +215,14 @@ function Section({
 export function FinanceUI({ data }: { data: FinanceData }) {
   const { income, expense, net } = data;
   const supRemaining = expense.supervisorTarget - expense.supervisorPaid;
+  // Money already paid to each supervisor (matched by the payment row's label
+  // = supervisor name), so "לפי משגיח" can show the net still owed per person.
+  const paidBySupervisor = new Map<string, number>();
+  for (const e of expense.byCategory["supervisor-payment"] ?? []) {
+    const name = (e.label ?? "").trim();
+    if (!name) continue;
+    paidBySupervisor.set(name, (paidBySupervisor.get(name) ?? 0) + e.amount);
+  }
   const adneiTotal = (expense.byCategory["adnei"] ?? []).reduce(
     (a, r) => a + r.amount,
     0
@@ -294,11 +302,23 @@ export function FinanceUI({ data }: { data: FinanceData }) {
           </div>
         </div>
         {expense.perSupervisor.length > 0 && (
-          <div className="text-xs text-[var(--color-muted-foreground)] mb-3">
+          <div className="text-xs text-[var(--color-muted-foreground)] mb-3 leading-6">
             לפי משגיח:{" "}
-            {expense.perSupervisor
-              .map((s) => `${s.name} ${nis(s.cost)}`)
-              .join(" · ")}
+            {expense.perSupervisor.map((s, i) => {
+              const paid = paidBySupervisor.get(s.name.trim()) ?? 0;
+              const rem = s.cost - paid;
+              return (
+                <span key={s.name} className="whitespace-nowrap">
+                  {i > 0 && " · "}
+                  <b className="text-[var(--color-foreground)]">{s.name}</b> —
+                  נשאר{" "}
+                  <b className={rem > 0 ? "text-red-600" : "text-green-700"}>
+                    {nis(rem)}
+                  </b>{" "}
+                  (שולם {nis(paid)} / {nis(s.cost)})
+                </span>
+              );
+            })}
           </div>
         )}
         <h3 className="text-sm font-medium text-[var(--color-muted-foreground)] mb-1">
