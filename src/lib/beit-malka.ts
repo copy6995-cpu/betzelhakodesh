@@ -1,17 +1,12 @@
 /**
  * בית מלכה beds-payment ledger, per Shabbat. Each row is either "מיטות"
- * (amount = beds × 22) or "אחר" (a flat sum). `paid` is the cash actually
- * paid against the row; the page tracks total-to-pay / paid / remaining.
+ * (₪22/bed + a ₪250 surcharge per 100-bed block) or "אחר" (a flat sum). `paid`
+ * is the cash actually paid against the row; the page tracks to-pay/paid/remaining.
+ * The pricing formula lives in ./beit-malka-pricing (pure, shared with the client).
  */
 import { prisma } from "./prisma";
 
-export const PER_BED = 22;
-
-/** The obligation for a row: beds × 22 for a מיטות row, else the flat sum. */
-export function rowAmount(kind: string, beds: number, flat: number): number {
-  if (kind === "מיטות") return Math.max(0, Math.floor(beds || 0)) * PER_BED;
-  return Math.max(0, flat || 0);
-}
+export { PER_BED, rowAmount, bedsAmount } from "./beit-malka-pricing";
 
 export type BeitMalkaRowT = {
   id: string;

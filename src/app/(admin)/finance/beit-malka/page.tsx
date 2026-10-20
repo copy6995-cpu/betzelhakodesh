@@ -17,7 +17,7 @@ export default async function BeitMalkaPage() {
             בית מלכה — מיטות
           </h1>
           <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
-            שנת {year} · שורת ״מיטות״ מחושבת ₪22 למיטה, שורת ״אחר״ סכום חופשי.
+            שנת {year} · שורת ״מיטות״ = ₪22 למיטה + תוספת ₪250 לכל 100 מיטות, שורת ״אחר״ סכום חופשי.
             הסכומים נשמרים אוטומטית.
           </p>
         </div>

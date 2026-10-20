@@ -3,13 +3,13 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BeitMalkaData, BeitMalkaRowT } from "@/lib/beit-malka";
+import { bedsAmount } from "@/lib/beit-malka-pricing";
 import {
   addBeitMalkaRow,
   deleteBeitMalkaRow,
   updateBeitMalkaRow,
 } from "./actions";
 
-const PER_BED = 22;
 const nis = (n: number) => (n ? `₪${Math.round(n).toLocaleString("he-IL")}` : "—");
 const num = (s: string | undefined) => {
   const n = parseFloat(s ?? "");
@@ -42,7 +42,7 @@ function build(rows: BeitMalkaRowT[]): Row[] {
 
 /** Obligation for a row given current inputs. */
 function rowAmt(r: Row): number {
-  return r.kind === "אחר" ? num(r.amount) : num(r.beds) * PER_BED;
+  return r.kind === "אחר" ? num(r.amount) : bedsAmount(num(r.beds));
 }
 
 const inp =
@@ -142,7 +142,7 @@ export function BeitMalkaGrid({ data }: { data: BeitMalkaData }) {
       <div className="bg-white rounded-xl card-shadow overflow-hidden">
         <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
           <div className="text-sm font-semibold text-[var(--color-primary)]">
-            {rows.length} שורות · ₪22 למיטה
+            {rows.length} שורות · ₪22 למיטה + ₪250 לכל 100 מיטות
           </div>
           {pending && (
             <span className="text-xs text-[var(--color-muted-foreground)]">
@@ -347,7 +347,7 @@ export function BeitMalkaGrid({ data }: { data: BeitMalkaData }) {
             className="h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
           >
             {nKind === "מיטות" && nBeds
-              ? `+ ${nis(num(nBeds) * PER_BED)}`
+              ? `+ ${nis(bedsAmount(num(nBeds)))}`
               : "+ הוסף"}
           </button>
         </div>
