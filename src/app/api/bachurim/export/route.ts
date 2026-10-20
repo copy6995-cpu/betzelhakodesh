@@ -24,6 +24,14 @@ export async function GET(req: NextRequest) {
     undefined) as string | undefined;
   const yeshiva = url.searchParams.get("yeshiva")?.trim() || undefined;
   const q = url.searchParams.get("q")?.trim() || undefined;
+  const shiur = url.searchParams.get("shiur")?.trim() || undefined;
+  const ariChul = url.searchParams.get("ariChul")?.trim() || undefined;
+  const endDate = url.searchParams.get("endDate")?.trim() || undefined;
+  const balance = (url.searchParams.get("balance")?.trim() || undefined) as
+    | "positive"
+    | "zero"
+    | "negative"
+    | undefined;
 
   const buf = await buildBachurimWorkbook({
     year,
@@ -32,6 +40,10 @@ export async function GET(req: NextRequest) {
     status: status as never,
     yeshiva,
     q,
+    shiur,
+    ariChul,
+    endDate,
+    balance,
   });
 
   const parts: string[] = ["בחורים"];

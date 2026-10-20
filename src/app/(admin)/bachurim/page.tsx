@@ -11,8 +11,19 @@ import { YeshivaPillFilter } from "@/components/yeshiva-pill-filter";
 import { SearchBox } from "@/components/search-box";
 import { Pagination } from "@/components/pagination";
 import { tokenSearchWhere } from "@/lib/search";
+import { AdvancedFilters } from "./advanced-filters";
 
 export const dynamic = "force-dynamic";
+
+type SortKey =
+  | "name"
+  | "yeshiva"
+  | "shiur"
+  | "city"
+  | "price"
+  | "paid"
+  | "balance"
+  | "endDate";
 
 const PAGE_SIZE = 200;
 
@@ -31,6 +42,12 @@ type SearchParams = {
   q?: string;
   page?: string;
   status?: StatusFilter;
+  shiur?: string;
+  ariChul?: string;
+  endDate?: string;
+  balance?: "positive" | "zero" | "negative" | "";
+  sort?: SortKey;
+  dir?: "asc" | "desc";
 };
 
 /** Build the Prisma where clause for a status filter. "unattached" is the
@@ -93,15 +110,25 @@ export default async function BachurimPage({
   const yeshiva = sp.yeshiva;
   const q = sp.q?.trim();
   const status = (sp.status ?? "all") as StatusFilter;
+  const shiur = sp.shiur?.trim();
+  const ariChul = sp.ariChul?.trim();
+  const endDate = sp.endDate?.trim();
+  const balance = sp.balance ?? "";
+  const sortKey = (sp.sort ?? "name") as SortKey;
+  const dir: "asc" | "desc" = sp.dir === "desc" ? "desc" : "asc";
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   // statusWhere can itself contain an `OR` (the active-אש"ל branch), and so
   // can the search — combine them as separate AND entries so neither `OR`
-  // key clobbers the other.
+  // key clobbers the other. The advanced filters (shiur / ariChul / endDate)
+  // are plain column matches.
   const where = {
     year,
     archived: false,
     ...(yeshiva ? { yeshiva } : {}),
+    ...(shiur ? { shiur } : {}),
+    ...(ariChul ? { ariChul } : {}),
+    ...(endDate ? { endDateLabel: endDate } : {}),
     AND: [
       statusWhere(status, expired),
       ...(q
@@ -130,23 +157,35 @@ export default async function BachurimPage({
   };
 
   const [
-    students,
-    total,
+    matching,
+    paidGroups,
     yeshivaGroups,
     totalInYear,
     statusCounts,
+    shiurRows,
+    endDateRows,
   ] = await Promise.all([
     prisma.student.findMany({
       where,
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        parent: { select: { id: true, phone: true } },
-        payments: { select: { amount: true } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        fatherName: true,
+        personalCode: true,
+        yeshiva: true,
+        shiur: true,
+        city: true,
+        price: true,
+        endDateLabel: true,
+        frozen: true,
       },
     }),
-    prisma.student.count({ where }),
+    prisma.payment.groupBy({
+      by: ["studentId"],
+      where: { student: where },
+      _sum: { amount: true },
+    }),
     prisma.student.groupBy({
       by: ["yeshiva"],
       where: { year, archived: false },
@@ -183,9 +222,82 @@ export default async function BachurimPage({
       eshelNoHook,
       eshel,
     })),
+    prisma.shiur.findMany({
+      orderBy: { displayOrder: "asc" },
+      select: { name: true },
+    }),
+    prisma.endDateOption.findMany({
+      where: { year },
+      orderBy: { label: "asc" },
+      select: { label: true },
+    }),
   ]);
 
+  const paidById = new Map(
+    paidGroups.map((g) => [g.studentId, Number(g._sum.amount ?? 0)])
+  );
+  type RowT = (typeof matching)[number] & {
+    paid: number;
+    priceN: number;
+    balance: number;
+  };
+  let rows: RowT[] = matching.map((s) => {
+    const priceN = s.price ?? 0;
+    const paid = paidById.get(s.id) ?? 0;
+    return { ...s, paid, priceN, balance: priceN - paid };
+  });
+
+  // Balance filter — יתרה = מחיר − שולם (this year only; debts are separate).
+  if (balance === "positive") rows = rows.filter((r) => r.balance > 0);
+  else if (balance === "zero") rows = rows.filter((r) => r.balance === 0);
+  else if (balance === "negative") rows = rows.filter((r) => r.balance < 0);
+
+  const he = (a: string | null, b: string | null) =>
+    (a ?? "").localeCompare(b ?? "", "he");
+  const byName = (a: RowT, b: RowT) =>
+    he(a.lastName, b.lastName) || he(a.firstName, b.firstName);
+  rows.sort((a, b) => {
+    let v: number;
+    switch (sortKey) {
+      case "yeshiva": v = he(a.yeshiva, b.yeshiva); break;
+      case "shiur": v = he(a.shiur, b.shiur); break;
+      case "city": v = he(a.city, b.city); break;
+      case "price": v = a.priceN - b.priceN; break;
+      case "paid": v = a.paid - b.paid; break;
+      case "balance": v = a.balance - b.balance; break;
+      case "endDate": v = he(a.endDateLabel, b.endDateLabel); break;
+      default: v = byName(a, b);
+    }
+    if (v === 0 && sortKey !== "name") v = byName(a, b);
+    return dir === "desc" ? -v : v;
+  });
+
+  const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const shiurim = shiurRows.map((s) => s.name);
+  const endDateLabels = endDateRows.map((e) => e.label);
+
+  // Preserve the current filters when building sort-header links.
+  const sortHref = (col: SortKey) => {
+    const p = new URLSearchParams();
+    const keep: [string, string | undefined][] = [
+      ["yeshiva", yeshiva],
+      ["q", q],
+      ["status", status === "all" ? undefined : status],
+      ["shiur", shiur],
+      ["ariChul", ariChul],
+      ["endDate", endDate],
+      ["balance", balance || undefined],
+    ];
+    for (const [k, val] of keep) if (val) p.set(k, val);
+    const nextDir = sortKey === col && dir === "asc" ? "desc" : "asc";
+    p.set("sort", col);
+    p.set("dir", nextDir);
+    return `/bachurim?${p.toString()}`;
+  };
+  const sortArrow = (col: SortKey) =>
+    sortKey === col ? (dir === "asc" ? " ▲" : " ▼") : "";
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -255,6 +367,10 @@ export default async function BachurimPage({
             if (yeshiva) params.set("yeshiva", yeshiva);
             if (q) params.set("q", q);
             if (opt.key !== "all") params.set("status", opt.key);
+            if (shiur) params.set("shiur", shiur);
+            if (ariChul) params.set("ariChul", ariChul);
+            if (endDate) params.set("endDate", endDate);
+            if (balance) params.set("balance", balance);
             const href = `/bachurim${params.toString() ? `?${params}` : ""}`;
             return (
               <Link
@@ -286,6 +402,10 @@ export default async function BachurimPage({
               if (yeshiva) params.set("yeshiva", yeshiva);
               if (q) params.set("q", q);
               if (status !== "all") params.set("status", status);
+              if (shiur) params.set("shiur", shiur);
+              if (ariChul) params.set("ariChul", ariChul);
+              if (endDate) params.set("endDate", endDate);
+              if (balance) params.set("balance", balance);
               return `/api/bachurim/export${
                 params.toString() ? `?${params}` : ""
               }`;
@@ -302,8 +422,14 @@ export default async function BachurimPage({
           </Link>
         </div>
       </div>
-      <div className="mb-6">
+      <div className="mb-4">
         <SearchBox placeholder="שם, קוד אישי, מספר הוק..." />
+      </div>
+      <div className="mb-6">
+        <div className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-2">
+          סינון מתקדם
+        </div>
+        <AdvancedFilters shiurim={shiurim} endDateLabels={endDateLabels} />
       </div>
 
       <div className="bg-white rounded-xl card-shadow">
@@ -323,68 +449,95 @@ export default async function BachurimPage({
                   pattern with the widest browser support. Each th keeps its
                   own opaque bg so the data rows scroll under it cleanly. */}
               <tr className="text-right text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                <th className="sticky top-16 z-20 py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">שם מלא</th>
+                <th className="sticky top-16 z-20 py-3 pe-5 ps-5 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("name")} className="hover:text-[var(--color-accent)]">
+                    שם מלא{sortArrow("name")}
+                  </Link>
+                </th>
                 <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">קוד אישי</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">ישיבה</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">שיעור</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">עיר</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">מחיר</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">שולם</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">יתרה</th>
-                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">תאריך סיום</th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("yeshiva")} className="hover:text-[var(--color-accent)]">
+                    ישיבה{sortArrow("yeshiva")}
+                  </Link>
+                </th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("shiur")} className="hover:text-[var(--color-accent)]">
+                    שיעור{sortArrow("shiur")}
+                  </Link>
+                </th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("city")} className="hover:text-[var(--color-accent)]">
+                    עיר{sortArrow("city")}
+                  </Link>
+                </th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("price")} className="hover:text-[var(--color-accent)]">
+                    מחיר{sortArrow("price")}
+                  </Link>
+                </th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("paid")} className="hover:text-[var(--color-accent)]">
+                    שולם{sortArrow("paid")}
+                  </Link>
+                </th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("balance")} className="hover:text-[var(--color-accent)]">
+                    יתרה{sortArrow("balance")}
+                  </Link>
+                </th>
+                <th className="sticky top-16 z-20 py-3 px-4 font-semibold bg-[var(--color-muted)]">
+                  <Link href={sortHref("endDate")} className="hover:text-[var(--color-accent)]">
+                    תאריך סיום{sortArrow("endDate")}
+                  </Link>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {students.map((s) => {
-                const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
-                const price = s.price ?? 0;
-                const remaining = price - paid;
-                return (
-                  <tr key={s.id} className="border-t border-[var(--color-border)]/60">
-                    <td className="py-2.5 pe-5 ps-5">
-                      <Link
-                        href={`/bachurim/${s.id}`}
-                        className="font-medium text-[var(--color-primary)] hover:text-[var(--color-accent)]"
-                      >
-                        {s.lastName} {s.firstName}
-                      </Link>
-                      {s.frozen && (
-                        <span className="ms-2 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700 align-middle">
-                          מוקפא
-                        </span>
-                      )}
-                      <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
-                        {s.fatherName && `בן ${s.fatherName}`}
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-[var(--color-muted-foreground)]">
-                      {s.personalCode}
-                    </td>
-                    <td className="py-2.5 px-4">{s.yeshiva}</td>
-                    <td className="py-2.5 px-4 text-center">{s.shiur ?? "—"}</td>
-                    <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
-                      {s.city ?? "—"}
-                    </td>
-                    <td className="py-2.5 px-4">{formatILS(price)}</td>
-                    <td className="py-2.5 px-4 text-[var(--color-success)]">
-                      {formatILS(paid)}
-                    </td>
-                    <td
-                      className={`py-2.5 px-4 font-semibold ${
-                        remaining > 0
-                          ? "text-[var(--color-accent)]"
-                          : "text-[var(--color-success)]"
-                      }`}
+              {pageRows.map((r) => (
+                <tr key={r.id} className="border-t border-[var(--color-border)]/60">
+                  <td className="py-2.5 pe-5 ps-5">
+                    <Link
+                      href={`/bachurim/${r.id}`}
+                      className="font-medium text-[var(--color-primary)] hover:text-[var(--color-accent)]"
                     >
-                      {formatILS(remaining)}
-                    </td>
-                    <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
-                      {s.endDateLabel ?? "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {students.length === 0 && (
+                      {r.lastName} {r.firstName}
+                    </Link>
+                    {r.frozen && (
+                      <span className="ms-2 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700 align-middle">
+                        מוקפא
+                      </span>
+                    )}
+                    <div className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+                      {r.fatherName && `בן ${r.fatherName}`}
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 font-mono text-[var(--color-muted-foreground)]">
+                    {r.personalCode}
+                  </td>
+                  <td className="py-2.5 px-4">{r.yeshiva}</td>
+                  <td className="py-2.5 px-4 text-center">{r.shiur ?? "—"}</td>
+                  <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
+                    {r.city ?? "—"}
+                  </td>
+                  <td className="py-2.5 px-4">{formatILS(r.priceN)}</td>
+                  <td className="py-2.5 px-4 text-[var(--color-success)]">
+                    {formatILS(r.paid)}
+                  </td>
+                  <td
+                    className={`py-2.5 px-4 font-semibold ${
+                      r.balance > 0
+                        ? "text-[var(--color-accent)]"
+                        : "text-[var(--color-success)]"
+                    }`}
+                  >
+                    {formatILS(r.balance)}
+                  </td>
+                  <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
+                    {r.endDateLabel ?? "—"}
+                  </td>
+                </tr>
+              ))}
+              {pageRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={9}

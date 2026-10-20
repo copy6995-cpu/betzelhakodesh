@@ -231,6 +231,10 @@ export async function loadBachurimForExport(opts: {
   status?: StatusFilter;
   yeshiva?: string;
   q?: string;
+  shiur?: string;
+  ariChul?: string;
+  endDate?: string;
+  balance?: "positive" | "zero" | "negative" | "";
 }): Promise<{
   rows: BachurimExportRow[];
   byYeshiva: Map<string, BachurimExportRow[]>;
@@ -251,6 +255,9 @@ export async function loadBachurimForExport(opts: {
     year: opts.year,
     archived: false,
     ...(opts.yeshiva ? { yeshiva: opts.yeshiva } : {}),
+    ...(opts.shiur ? { shiur: opts.shiur } : {}),
+    ...(opts.ariChul ? { ariChul: opts.ariChul } : {}),
+    ...(opts.endDate ? { endDateLabel: opts.endDate } : {}),
     AND: [
       statusWhere(opts.status, expired),
       ...(opts.q?.trim()
@@ -267,7 +274,7 @@ export async function loadBachurimForExport(opts: {
     ],
   };
 
-  const students = await prisma.student.findMany({
+  let students = await prisma.student.findMany({
     where,
     orderBy: [
       { yeshiva: "asc" },
@@ -279,6 +286,19 @@ export async function loadBachurimForExport(opts: {
       payments: { select: { amount: true } },
     },
   });
+
+  // Balance filter (יתרה = מחיר − שולם), applied in JS like the list page.
+  if (opts.balance) {
+    students = students.filter((s) => {
+      const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
+      const bal = (s.price ?? 0) - paid;
+      return opts.balance === "positive"
+        ? bal > 0
+        : opts.balance === "zero"
+        ? bal === 0
+        : bal < 0;
+    });
+  }
 
   const rows: BachurimExportRow[] = students.map((s) => {
     const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
@@ -358,6 +378,10 @@ export async function buildBachurimWorkbook(opts: {
   status?: StatusFilter;
   yeshiva?: string;
   q?: string;
+  shiur?: string;
+  ariChul?: string;
+  endDate?: string;
+  balance?: "positive" | "zero" | "negative" | "";
 }): Promise<Buffer> {
   const { rows, byYeshiva } = await loadBachurimForExport(opts);
 
