@@ -144,6 +144,7 @@ export async function loadChulTotal(year: string): Promise<number> {
 export type DonationRow = {
   id: string;
   donor: string;
+  parentId: string | null;
   date: string | null;
   usd: number;
   rate: number | null;
@@ -168,6 +169,7 @@ export async function loadChulRep(id: string): Promise<{
   const donations: DonationRow[] = rep.donations.map((d) => ({
     id: d.id,
     donor: d.donor,
+    parentId: d.parentId,
     date: d.date ? d.date.toISOString().slice(0, 10) : null,
     usd: d.usd,
     rate: d.rate,

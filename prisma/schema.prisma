@@ -434,6 +434,9 @@ model ChulDonation {
   repId     String
   rep       Representative  @relation(fields: [repId], references: [id], onDelete: Cascade)
   donor     String
+  // The parent (הורה) chosen from the list; lets the export list that parent's
+  // bachurim personal-codes. Plain id (no relation) — resolved in the export.
+  parentId  String?
   date      DateTime?
   usd       Float          @default(0)
   rate      Float?

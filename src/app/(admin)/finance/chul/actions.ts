@@ -63,6 +63,7 @@ export async function deleteChulRep(id: string): Promise<void> {
 
 export type DonationInput = {
   donor: string;
+  parentId?: string | null;
   date: string | null;
   usd: number;
   rate: number | null;
@@ -91,6 +92,7 @@ export async function addDonation(
     data: {
       repId,
       donor: input.donor.trim(),
+      parentId: input.parentId || null,
       date: input.date ? new Date(`${input.date}T00:00:00`) : null,
       usd: Number(input.usd) || 0,
       rate: input.rate ? Number(input.rate) : null,
@@ -117,6 +119,9 @@ export async function updateDonation(
     where: { id },
     data: {
       ...(fields.donor !== undefined ? { donor: fields.donor.trim() } : {}),
+      ...(fields.parentId !== undefined
+        ? { parentId: fields.parentId || null }
+        : {}),
       ...(fields.date !== undefined
         ? { date: fields.date ? new Date(`${fields.date}T00:00:00`) : null }
         : {}),

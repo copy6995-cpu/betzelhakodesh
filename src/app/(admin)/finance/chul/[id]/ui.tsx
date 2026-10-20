@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { DonationRow } from "@/lib/reps";
 import { addDonation, deleteDonation, updateDonation } from "../actions";
+
+type ParentOpt = { id: string; name: string; hint: string };
 
 const nis = (n: number) => (n ? `₪${Math.round(n).toLocaleString("he-IL")}` : "—");
 const usdFmt = (n: number) => (n ? `$${Math.round(n).toLocaleString("he-IL")}` : "—");
@@ -15,6 +17,7 @@ const num = (s: string | undefined) => {
 type Row = {
   id: string;
   donor: string;
+  parentId: string;
   date: string;
   usd: string;
   rate: string;
@@ -26,6 +29,7 @@ function build(rows: DonationRow[]): Row[] {
   return rows.map((d) => ({
     id: d.id,
     donor: d.donor,
+    parentId: d.parentId ?? "",
     date: d.date ?? "",
     usd: d.usd ? String(d.usd) : "",
     rate: d.rate ? String(d.rate) : "",
@@ -41,15 +45,18 @@ const addInp = "h-9 rounded-lg border border-[var(--color-border)] px-2.5 text-s
 export function DonationsGrid({
   repId,
   donations,
+  parents,
 }: {
   repId: string;
   donations: DonationRow[];
+  parents: ParentOpt[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [rows, setRows] = useState<Row[]>(() => build(donations));
 
   const [nDonor, setNDonor] = useState("");
+  const [nParentId, setNParentId] = useState("");
   const [nDate, setNDate] = useState("");
   const [nUsd, setNUsd] = useState("");
   const [nRate, setNRate] = useState("");
@@ -73,6 +80,7 @@ export function DonationsGrid({
     start(() =>
       updateDonation(id, {
         donor: r.donor,
+        parentId: r.parentId || null,
         date: r.date || null,
         usd: num(r.usd),
         rate: r.rate ? num(r.rate) : null,
@@ -80,6 +88,12 @@ export function DonationsGrid({
         notes: r.notes,
       })
     );
+  }
+  function pickParent(id: string, p: ParentOpt) {
+    setRows((rs) =>
+      rs.map((r) => (r.id === id ? { ...r, donor: p.name, parentId: p.id } : r))
+    );
+    start(() => updateDonation(id, { donor: p.name, parentId: p.id }));
   }
   function remove(id: string, donor: string) {
     if (!confirm(`למחוק את התרומה של "${donor || "ללא שם"}"?`)) return;
@@ -94,10 +108,11 @@ export function DonationsGrid({
     (num(nUsd) && num(nRate) ? Math.round(num(nUsd) * num(nRate)) : 0);
 
   function add() {
-    if (!nDonor.trim() && !nUsd && !nIls) return;
+    if (!nParentId) return; // donor must be chosen from the parents list
     start(async () => {
       await addDonation(repId, {
         donor: nDonor,
+        parentId: nParentId || null,
         date: nDate || null,
         usd: num(nUsd),
         rate: nRate ? num(nRate) : null,
@@ -105,6 +120,7 @@ export function DonationsGrid({
         notes: nNotes,
       });
       setNDonor("");
+      setNParentId("");
       setNDate("");
       setNUsd("");
       setNRate("");
@@ -148,12 +164,12 @@ export function DonationsGrid({
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-[var(--color-border)]/50">
-                  <td className="px-2 py-1">
-                    <input
+                  <td className="px-2 py-1 min-w-[160px]">
+                    <ParentCombo
+                      parents={parents}
                       value={r.donor}
-                      onChange={(e) => edit(r.id, "donor", e.target.value)}
-                      onBlur={() => save(r.id)}
-                      className={inp + " font-medium"}
+                      onPick={(p) => pickParent(r.id, p)}
+                      inputClass={inp + " font-medium"}
                     />
                   </td>
                   <td className="px-1 py-1">
@@ -243,11 +259,15 @@ export function DonationsGrid({
 
         {/* Add */}
         <div className="px-4 py-3 border-t border-[var(--color-border)] flex flex-wrap items-end gap-2">
-          <input
+          <ParentCombo
+            parents={parents}
             value={nDonor}
-            onChange={(e) => setNDonor(e.target.value)}
-            placeholder="שם התורם"
-            className={addInp + " flex-1 min-w-[130px]"}
+            onPick={(p) => {
+              setNDonor(p.name);
+              setNParentId(p.id);
+            }}
+            inputClass={addInp + " w-full"}
+            wrapClass="flex-1 min-w-[160px]"
           />
           <input
             type="date"
@@ -313,6 +333,82 @@ function Stat({
       >
         {text}
       </div>
+    </div>
+  );
+}
+
+// Searchable parent picker — donor must be chosen from the parents list.
+function ParentCombo({
+  parents,
+  value,
+  onPick,
+  inputClass,
+  wrapClass,
+}: {
+  parents: ParentOpt[];
+  value: string;
+  onPick: (p: ParentOpt) => void;
+  inputClass: string;
+  wrapClass?: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setQuery(value), [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery(value);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open, value]);
+
+  const q = query.trim();
+  const matches = (
+    q ? parents.filter((p) => p.name.includes(q) || p.hint.includes(q)) : parents
+  ).slice(0, 30);
+
+  return (
+    <div ref={wrapRef} className={"relative " + (wrapClass ?? "")}>
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="שם התורם"
+        className={inputClass}
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute z-30 mt-1 start-0 end-0 min-w-[200px] max-h-56 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-white shadow-lg">
+          {matches.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                onPick(p);
+                setQuery(p.name);
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-right text-sm hover:bg-[var(--color-muted)]"
+            >
+              <span className="truncate">{p.name}</span>
+              {p.hint && (
+                <span className="text-xs text-[var(--color-muted-foreground)] shrink-0" dir="ltr">
+                  {p.hint}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

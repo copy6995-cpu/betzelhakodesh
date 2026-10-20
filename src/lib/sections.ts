@@ -82,7 +82,9 @@ export function repCanAccess(
   if (repKind === "chul") {
     return (
       pathname === `/finance/chul/${repId}` ||
-      pathname.startsWith(`/finance/chul/${repId}/`)
+      pathname.startsWith(`/finance/chul/${repId}/`) ||
+      // Their own donations export (the route re-checks repId ownership).
+      pathname === "/api/finance/chul/export"
     );
   }
   if (repKind === "yeshiva") {
