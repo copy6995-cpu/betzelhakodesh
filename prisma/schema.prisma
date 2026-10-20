@@ -379,6 +379,12 @@ model FinanceEntry {
   amount    Float     @default(0)
   date      DateTime?
   meta      String? // JSON extras (e.g. beit-malka bed count, supervisor id)
+  // אדני הקודש approval workflow: an adnei rep signs off each entry. `approved`
+  // flips to false when the admin edits an approved row; `approvedSnapshot` is
+  // the JSON of the values at the last approval, so the rep sees what changed.
+  approved         Boolean  @default(false)
+  approvedAt       DateTime?
+  approvedSnapshot String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

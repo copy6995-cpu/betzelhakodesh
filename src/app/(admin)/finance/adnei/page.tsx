@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { getActiveYear } from "@/lib/year";
 import { AdneiLedger, type AdneiRow } from "./ui";
 
@@ -14,22 +15,74 @@ function parseMeta(s: string | null): { from?: string; to?: string } {
   }
 }
 
+const isoDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+
 export default async function AdneiPage() {
   const year = await getActiveYear();
-  const entries = await prisma.financeEntry.findMany({
-    where: { year, kind: "expense", category: "adnei" },
-    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-  });
+  const [entries, session] = await Promise.all([
+    prisma.financeEntry.findMany({
+      where: { year, kind: "expense", category: "adnei" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    }),
+    auth(),
+  ]);
+
+  const u = session?.user as
+    | { role?: string; repKind?: string | null }
+    | undefined;
+  const isRep = u?.role === "rep";
+  const canEdit = !isRep; // admin / finance user
+  const canApprove = u?.role === "admin" || (isRep && u?.repKind === "adnei");
+
+  const fmtVal = (k: string, v: unknown) =>
+    v === null || v === undefined || v === ""
+      ? "—"
+      : k === "amount"
+      ? `₪${Math.round(Number(v)).toLocaleString("he-IL")}`
+      : String(v);
 
   const rows: AdneiRow[] = entries.map((e) => {
     const m = parseMeta(e.meta);
+    const cur: Record<string, unknown> = {
+      date: isoDate(e.date),
+      amount: e.amount,
+      ptype: e.label ?? null,
+      from: m.from ?? null,
+      to: m.to ?? null,
+    };
+    // If an approved row was edited it's now pending; diff against the snapshot.
+    const changes: { label: string; from: string; to: string }[] = [];
+    if (!e.approved && e.approvedSnapshot) {
+      try {
+        const snap = JSON.parse(e.approvedSnapshot) as Record<string, unknown>;
+        const fields: [string, string][] = [
+          ["תאריך", "date"],
+          ["סכום", "amount"],
+          ["סוג תשלום", "ptype"],
+          ["מ-גוף", "from"],
+          ["נמסר ל", "to"],
+        ];
+        for (const [lbl, k] of fields) {
+          const o = snap[k] ?? null;
+          const n = cur[k] ?? null;
+          if (String(o ?? "") !== String(n ?? "")) {
+            changes.push({ label: lbl, from: fmtVal(k, o), to: fmtVal(k, n) });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
     return {
       id: e.id,
-      date: e.date ? e.date.toISOString().slice(0, 10) : null,
+      date: cur.date as string | null,
       amount: e.amount,
       ptype: e.label,
       from: m.from ?? null,
       to: m.to ?? null,
+      approved: e.approved,
+      approvedAt: isoDate(e.approvedAt),
+      changes,
     };
   });
 
@@ -41,18 +94,31 @@ export default async function AdneiPage() {
             אדני הקודש
           </h1>
           <p className="text-[var(--color-muted-foreground)] mt-1 text-sm">
-            שנת {year} · יומן תנועות. הסך מצטרף להוצאות בדף הכנסות והוצאות.
+            שנת {year} · יומן תנועות.{" "}
+            {canEdit
+              ? "הסך מצטרף להוצאות בדף הכנסות והוצאות — ממתין לאישור הנציג."
+              : "יש לאשר כל תנועה."}
           </p>
         </div>
-        <Link
-          href="/finance"
-          className="inline-flex items-center h-9 px-4 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"
-        >
-          → חזרה להכנסות והוצאות
-        </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/finance/adnei/export"
+            className="inline-flex items-center h-9 px-4 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors whitespace-nowrap"
+          >
+            ↓ ייצוא לאקסל
+          </a>
+          {!isRep && (
+            <Link
+              href="/finance"
+              className="inline-flex items-center h-9 px-4 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"
+            >
+              → חזרה להכנסות והוצאות
+            </Link>
+          )}
+        </div>
       </div>
 
-      <AdneiLedger rows={rows} />
+      <AdneiLedger rows={rows} canEdit={canEdit} canApprove={canApprove} />
     </div>
   );
 }

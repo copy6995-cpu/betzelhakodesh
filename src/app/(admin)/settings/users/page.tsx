@@ -41,9 +41,14 @@ export default async function UsersPage() {
     sections: parseSections(r.sections),
     repId: r.repId,
   }));
+  const kindLabel: Record<string, string> = {
+    chul: "חול",
+    yeshiva: "ישיבה",
+    adnei: "אדני הקודש",
+  };
   const repOptions = reps.map((r) => ({
     id: r.id,
-    label: `${r.kind === "chul" ? "חול" : "ישיבה"} · ${r.name}${
+    label: `${kindLabel[r.kind] ?? r.kind} · ${r.name}${
       r.yeshiva ? ` (${r.yeshiva})` : ""
     }`,
   }));

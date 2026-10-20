@@ -69,6 +69,7 @@ export function repHome(
 ): string {
   if (repKind === "chul" && repId) return `/finance/chul/${repId}`;
   if (repKind === "yeshiva") return "/tornut";
+  if (repKind === "adnei") return "/finance/adnei";
   return "/";
 }
 
@@ -89,6 +90,13 @@ export function repCanAccess(
   }
   if (repKind === "yeshiva") {
     return underPrefix(pathname, "/tornut");
+  }
+  if (repKind === "adnei") {
+    // The adnei approver sees only the adnei ledger (+ its export).
+    return (
+      underPrefix(pathname, "/finance/adnei") ||
+      pathname === "/api/finance/adnei/export"
+    );
   }
   return false;
 }
