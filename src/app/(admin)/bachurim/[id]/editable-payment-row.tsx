@@ -48,10 +48,13 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
     setEditing(false);
   }
 
+  const numLabel =
+    payment.paymentNumber === 0 ? "—" : `#${payment.paymentNumber}`;
+
   if (editing) {
     return (
       <tr className="border-b border-[var(--color-border)]/50 bg-[var(--color-muted)]/30">
-        <td className="py-2 pe-4">#{payment.paymentNumber}</td>
+        <td className="py-2 pe-4">{numLabel}</td>
         <td className="py-2 px-4">
           <input
             inputMode="numeric"
@@ -116,7 +119,7 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
 
   return (
     <tr className="border-b border-[var(--color-border)]/50">
-      <td className="py-2.5 pe-4">#{payment.paymentNumber}</td>
+      <td className="py-2.5 pe-4">{numLabel}</td>
       <td className="py-2.5 px-4 font-semibold">{formatILS(payment.amount)}</td>
       <td className="py-2.5 px-4">{payment.method ?? "—"}</td>
       <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
@@ -137,7 +140,7 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
         </button>
         <DeletePaymentButton
           paymentId={payment.id}
-          label={`#${payment.paymentNumber} · ${formatILS(payment.amount)}`}
+          label={`${numLabel} · ${formatILS(payment.amount)}`}
         />
       </td>
     </tr>

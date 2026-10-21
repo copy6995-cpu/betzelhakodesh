@@ -287,12 +287,11 @@ export default async function BachurDetailPage({
                 </thead>
                 <tbody>
                   {student.payments.map((p) => {
-                    // Nedarim payments are synced from the API — read-only. Manual
-                    // rows are editable (and deletable) inline.
+                    // Synced-from-API payments are read-only; manual ones are
+                    // editable. Decide by SOURCE only — some manual payments also
+                    // carry paymentNumber 0, so that must not lock them.
                     const isNedarim =
-                      p.source === "nedarim" ||
-                      p.method === "נדרים פלוס" ||
-                      p.paymentNumber === 0;
+                      p.source === "nedarim" || p.method === "נדרים פלוס";
                     if (!isNedarim) {
                       return (
                         <EditablePaymentRow
