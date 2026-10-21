@@ -32,7 +32,11 @@ export default async function BachurDetailPage({
 
   if (!student) return notFound();
 
-  const paid = student.payments.reduce((a, p) => a + Number(p.amount), 0);
+  // חד פעמי isn't tuition — it never counts toward שולם/יתרה.
+  const ONE_TIME_METHOD = "חד פעמי";
+  const paid = student.payments
+    .filter((p) => p.method !== ONE_TIME_METHOD)
+    .reduce((a, p) => a + Number(p.amount), 0);
   const price = student.price ?? 0;
   // יתרה includes prior-year debts (paid settles debts oldest-first, then annual).
   const settle = settleDebts(

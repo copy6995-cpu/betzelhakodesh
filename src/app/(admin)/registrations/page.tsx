@@ -5,6 +5,9 @@ import {
   resolveRegistrationSource,
 } from "@/lib/registration-export";
 import { getActiveYear } from "@/lib/year";
+import { weekLabel } from "@/lib/weeks";
+import { formatILS } from "@/lib/utils";
+import { loadYemotGroupMoney } from "@/lib/yemot-groups";
 import { RegistrationsUI } from "./ui";
 import { YemotSyncButtons } from "@/components/yemot-sync-buttons";
 
@@ -73,6 +76,13 @@ export default async function RegistrationsPage({
   // Fallback state for the UI empty case.
   const anyBedsEver = await prisma.yemotBedReservation.count();
 
+  // Weekly "חד פעמי" (קבוצה 23 + manual חד-פעמי payments), newest week first.
+  const groupMoney = await loadYemotGroupMoney(year);
+  const weeks = [...groupMoney.weekly23.entries()]
+    .filter(([, amt]) => amt > 0)
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  const weeklyTotal = weeks.reduce((a, [, amt]) => a + amt, 0);
+
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
@@ -87,6 +97,44 @@ export default async function RegistrationsPage({
         </div>
         <YemotSyncButtons />
       </div>
+
+      {weeks.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl card-shadow overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-sm font-semibold text-[var(--color-primary)]">
+              סיכום שבועי — חד פעמי (קבוצה 23)
+            </div>
+            <div className="text-sm font-bold text-[var(--color-accent)]">
+              סה״כ {formatILS(weeklyTotal)}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wider text-[var(--color-muted-foreground)] bg-[var(--color-muted)] text-right">
+                  <th className="py-2.5 pe-5 ps-5 font-semibold">שבוע</th>
+                  <th className="py-2.5 px-4 text-left font-semibold">סכום</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weeks.map(([wk, amt]) => (
+                  <tr key={wk} className="border-t border-[var(--color-border)]/60">
+                    <td className="py-2 pe-5 ps-5">
+                      {weekLabel(wk)}{" "}
+                      <span className="text-xs text-[var(--color-muted-foreground)] font-mono">
+                        {wk}
+                      </span>
+                    </td>
+                    <td className="py-2 px-4 text-left font-semibold tabular-nums text-[var(--color-accent)] whitespace-nowrap">
+                      {formatILS(amt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <RegistrationsUI
         from={from}

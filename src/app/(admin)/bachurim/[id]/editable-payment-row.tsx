@@ -49,6 +49,7 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
   }
 
   const isRefund = payment.amount < 0;
+  const isOneTime = payment.method === "חד פעמי";
   const numLabel =
     payment.paymentNumber === 0 ? "—" : `#${payment.paymentNumber}`;
 
@@ -136,7 +137,14 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
       >
         {formatILS(payment.amount)}
       </td>
-      <td className="py-2.5 px-4">{payment.method ?? "—"}</td>
+      <td className="py-2.5 px-4">
+        {payment.method ?? "—"}
+        {isOneTime && (
+          <span className="ms-2 px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 text-[10px] font-semibold">
+            לא ביתרה
+          </span>
+        )}
+      </td>
       <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
         {payment.dateISO
           ? new Date(`${payment.dateISO}T00:00:00`).toLocaleDateString("he-IL")

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveYear } from "@/lib/year";
 import { formatILS, formatNum } from "@/lib/utils";
+import { loadYemotGroupMoney, ONE_TIME_METHOD } from "@/lib/yemot-groups";
 import { Pagination } from "@/components/pagination";
 import { SyncPaymentsButton } from "./sync-payments-button";
 
@@ -20,45 +21,42 @@ export default async function PaymentsPage({
   const year = await getActiveYear();
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const [payments, total, agg, matrixRows, studentsForBalance] = await Promise.all([
-    prisma.payment.findMany({
-      where: { student: { year, archived: false } },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: { student: { select: { id: true, firstName: true, lastName: true } } },
-    }),
-    prisma.payment.count({ where: { student: { year, archived: false } } }),
-    prisma.payment.aggregate({
-      where: { student: { year, archived: false } },
-      _sum: { amount: true },
-    }),
-    prisma.payment.findMany({
-      where: { student: { year, archived: false } },
-      select: {
-        amount: true,
-        method: true,
-        studentId: true,
-        student: { select: { yeshiva: true } },
-      },
-    }),
-    prisma.student.findMany({
-      where: { year, archived: false },
-      select: { id: true, yeshiva: true, price: true },
-    }),
-  ]);
+  const [payments, total, matrixRows, studentsForBalance, groupMoney] =
+    await Promise.all([
+      prisma.payment.findMany({
+        where: { student: { year, archived: false } },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: { student: { select: { id: true, firstName: true, lastName: true } } },
+      }),
+      prisma.payment.count({ where: { student: { year, archived: false } } }),
+      prisma.payment.findMany({
+        where: { student: { year, archived: false } },
+        select: {
+          amount: true,
+          method: true,
+          studentId: true,
+          student: { select: { yeshiva: true } },
+        },
+      }),
+      prisma.student.findMany({
+        where: { year, archived: false },
+        select: { id: true, yeshiva: true, price: true },
+      }),
+      loadYemotGroupMoney(year),
+    ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const totalAmt = Number(agg._sum.amount ?? 0);
-  const share = (v: number) =>
-    totalAmt > 0 ? `${((v / totalAmt) * 100).toFixed(1)}%` : "—";
 
-  // Per-yeshiva × payment-method money matrix (summary table at the top).
+  // Per-yeshiva × payment-method matrix — TUITION only (חד פעמי is excluded;
+  // it's tracked in the separate group columns, not toward tuition).
   const methodName = (m: string | null) => (m && m.trim()) || "ללא סיווג";
   const cell = new Map<string, Map<string, number>>();
   const methodTotals = new Map<string, number>();
   const yeshivaTotals = new Map<string, number>();
   for (const p of matrixRows) {
+    if (p.method === ONE_TIME_METHOD) continue; // not tuition
     const y = p.student.yeshiva?.trim() || "ללא ישיבה";
     const m = methodName(p.method);
     const amt = Number(p.amount);
@@ -68,14 +66,31 @@ export default async function PaymentsPage({
     methodTotals.set(m, (methodTotals.get(m) ?? 0) + amt);
     yeshivaTotals.set(y, (yeshivaTotals.get(y) ?? 0) + amt);
   }
+  const totalAmt = [...yeshivaTotals.values()].reduce((a, b) => a + b, 0);
+  const share = (v: number) =>
+    totalAmt > 0 ? `${((v / totalAmt) * 100).toFixed(1)}%` : "—";
   const methods = [...methodTotals.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
-  const yeshivot = [...yeshivaTotals.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+
+  // Group-money columns (separate from tuition): חד פעמי (ק23 + manual) · ק25 · 11-18.
+  const grp = groupMoney.byYeshiva;
+  const emptyGrp = { oneTime: 0, grace25: 0, yesh: 0 };
+  const grpTotals = { oneTime: 0, grace25: 0, yesh: 0 };
+  for (const g of grp.values()) {
+    grpTotals.oneTime += g.oneTime;
+    grpTotals.grace25 += g.grace25;
+    grpTotals.yesh += g.yesh;
+  }
+  // Rows = every yeshiva with tuition payments OR group money.
+  const yeshivot = [
+    ...new Set([...yeshivaTotals.keys(), ...grp.keys()]),
+  ].sort((a, b) => (yeshivaTotals.get(b) ?? 0) - (yeshivaTotals.get(a) ?? 0));
 
   // Paid-vs-remaining for the pies — CURRENT YEAR only (price vs payments; debts
   // are a separate page). Remaining is summed per student so overpayers don't
   // mask others' debt. Collected = price − remaining (never more than price).
   const paidByStudent = new Map<string, number>();
   for (const p of matrixRows) {
+    if (p.method === ONE_TIME_METHOD) continue; // חד פעמי isn't tuition
     paidByStudent.set(
       p.studentId,
       (paidByStudent.get(p.studentId) ?? 0) + Number(p.amount)
@@ -177,10 +192,21 @@ export default async function PaymentsPage({
                   ))}
                   <th className="py-3 px-4 text-left font-semibold whitespace-nowrap">סה״כ</th>
                   <th className="py-3 px-4 text-left font-semibold whitespace-nowrap">אחוז</th>
+                  <th className="py-3 px-4 text-left font-semibold whitespace-nowrap border-s-2 border-[var(--color-border)] text-[var(--color-accent)]">
+                    חד פעמי
+                  </th>
+                  <th className="py-3 px-4 text-left font-semibold whitespace-nowrap text-[var(--color-accent)]">
+                    קבוצה 25
+                  </th>
+                  <th className="py-3 px-4 text-left font-semibold whitespace-nowrap text-[var(--color-accent)]">
+                    קבוצות 11-18
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {yeshivot.map((y) => (
+                {yeshivot.map((y) => {
+                  const g = grp.get(y) ?? emptyGrp;
+                  return (
                   <tr key={y} className="border-t border-[var(--color-border)]/60">
                     <th className="sticky start-0 z-10 bg-white py-2.5 pe-5 ps-5 text-right font-medium whitespace-nowrap">
                       {y}
@@ -204,8 +230,18 @@ export default async function PaymentsPage({
                     <td className="py-2.5 px-4 text-left tabular-nums text-[var(--color-muted-foreground)] whitespace-nowrap">
                       {share(yeshivaTotals.get(y) ?? 0)}
                     </td>
+                    <td className="py-2.5 px-4 text-left tabular-nums whitespace-nowrap border-s-2 border-[var(--color-border)]/50 text-[var(--color-accent)] font-medium">
+                      {g.oneTime ? formatILS(g.oneTime) : "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-left tabular-nums whitespace-nowrap text-[var(--color-muted-foreground)]">
+                      {g.grace25 ? formatILS(g.grace25) : "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-left tabular-nums whitespace-nowrap text-[var(--color-muted-foreground)]">
+                      {g.yesh ? formatILS(g.yesh) : "—"}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-muted)]/50 font-bold">
@@ -222,6 +258,15 @@ export default async function PaymentsPage({
                   </td>
                   <td className="py-3 px-4 text-left tabular-nums whitespace-nowrap">
                     100%
+                  </td>
+                  <td className="py-3 px-4 text-left tabular-nums whitespace-nowrap border-s-2 border-[var(--color-border)] text-[var(--color-accent)]">
+                    {formatILS(grpTotals.oneTime)}
+                  </td>
+                  <td className="py-3 px-4 text-left tabular-nums whitespace-nowrap text-[var(--color-accent)]">
+                    {formatILS(grpTotals.grace25)}
+                  </td>
+                  <td className="py-3 px-4 text-left tabular-nums whitespace-nowrap text-[var(--color-accent)]">
+                    {formatILS(grpTotals.yesh)}
                   </td>
                 </tr>
               </tfoot>
