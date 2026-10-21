@@ -7,7 +7,7 @@ import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
 import { settleDebts } from "@/lib/debts";
 import { AddReminder, ReminderControls } from "@/app/(admin)/reminders/ui";
 import { DeleteStudentButton } from "./delete-button";
-import { DeletePaymentButton } from "./delete-payment-button";
+import { EditablePaymentRow } from "./editable-payment-row";
 import { PromoteStudentButton } from "./promote-button";
 import { DetachParentButton } from "./detach-parent-button";
 
@@ -287,13 +287,29 @@ export default async function BachurDetailPage({
                 </thead>
                 <tbody>
                   {student.payments.map((p) => {
-                    // Nedarim payments are synced from the API — deleting them
-                    // is pointless (they re-materialize), so only manual/other
-                    // rows get a delete control.
+                    // Nedarim payments are synced from the API — read-only. Manual
+                    // rows are editable (and deletable) inline.
                     const isNedarim =
                       p.source === "nedarim" ||
                       p.method === "נדרים פלוס" ||
                       p.paymentNumber === 0;
+                    if (!isNedarim) {
+                      return (
+                        <EditablePaymentRow
+                          key={p.id}
+                          payment={{
+                            id: p.id,
+                            paymentNumber: p.paymentNumber,
+                            amount: Number(p.amount),
+                            method: p.method,
+                            dateISO: p.date
+                              ? p.date.toISOString().slice(0, 10)
+                              : null,
+                            externalRef: p.externalRef,
+                          }}
+                        />
+                      );
+                    }
                     return (
                       <tr key={p.id} className="border-b border-[var(--color-border)]/50">
                         <td className="py-2.5 pe-4">
@@ -309,18 +325,7 @@ export default async function BachurDetailPage({
                         <td className="py-2.5 px-4 text-[var(--color-muted-foreground)] font-mono text-xs">
                           {p.externalRef ?? "—"}
                         </td>
-                        <td className="py-2.5 px-4 text-left">
-                          {!isNedarim && (
-                            <DeletePaymentButton
-                              paymentId={p.id}
-                              label={`${
-                                p.paymentNumber === 0
-                                  ? "נדרים"
-                                  : `#${p.paymentNumber}`
-                              } · ${formatILS(Number(p.amount))}`}
-                            />
-                          )}
-                        </td>
+                        <td className="py-2.5 px-4 text-left" />
                       </tr>
                     );
                   })}

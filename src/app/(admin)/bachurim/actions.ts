@@ -199,6 +199,34 @@ export async function addPayment(payload: {
   revalidatePath("/payments");
 }
 
+/** Edit an existing (manual) payment. */
+export async function updatePayment(
+  id: string,
+  payload: {
+    amount: number;
+    method: string | null;
+    date: string | null;
+    externalRef: string | null;
+  }
+): Promise<void> {
+  const p = await prisma.payment.findUnique({
+    where: { id },
+    select: { studentId: true },
+  });
+  if (!p) return;
+  await prisma.payment.update({
+    where: { id },
+    data: {
+      amount: Number(payload.amount) || 0,
+      method: payload.method?.trim() || null,
+      date: payload.date ? new Date(`${payload.date}T00:00:00`) : null,
+      externalRef: payload.externalRef?.trim() || null,
+    },
+  });
+  revalidatePath(`/bachurim/${p.studentId}`);
+  revalidatePath("/payments");
+}
+
 /**
  * Copy a single student to another school year while KEEPING their existing
  * personalCode (that's the whole point — bulk import gave them a random new
