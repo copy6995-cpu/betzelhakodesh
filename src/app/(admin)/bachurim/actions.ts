@@ -199,6 +199,37 @@ export async function addPayment(payload: {
   revalidatePath("/payments");
 }
 
+/** Record a refund to the bachur — a payment with a NEGATIVE amount, so it
+ *  reduces "שולם" and raises the balance. Method is whatever it was refunded by. */
+export async function addRefund(payload: {
+  studentId: string;
+  amount: number;
+  method: string | null;
+  date: string | null;
+  notes: string | null;
+}): Promise<void> {
+  const amt = Math.abs(Number(payload.amount) || 0);
+  if (amt <= 0) throw new Error("סכום לא תקין");
+  const agg = await prisma.payment.aggregate({
+    where: { studentId: payload.studentId },
+    _max: { paymentNumber: true },
+  });
+  const nextNum = (agg._max.paymentNumber ?? 0) + 1;
+  await prisma.payment.create({
+    data: {
+      studentId: payload.studentId,
+      paymentNumber: nextNum,
+      amount: -amt, // negative = refund
+      method: payload.method?.trim() || null,
+      date: payload.date ? new Date(`${payload.date}T00:00:00`) : null,
+      notes: payload.notes?.trim() ? `החזר · ${payload.notes.trim()}` : "החזר",
+      source: "manual",
+    },
+  });
+  revalidatePath(`/bachurim/${payload.studentId}`);
+  revalidatePath("/payments");
+}
+
 /** Edit an existing (manual) payment. */
 export async function updatePayment(
   id: string,

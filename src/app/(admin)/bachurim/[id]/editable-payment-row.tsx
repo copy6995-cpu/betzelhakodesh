@@ -48,6 +48,7 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
     setEditing(false);
   }
 
+  const isRefund = payment.amount < 0;
   const numLabel =
     payment.paymentNumber === 0 ? "—" : `#${payment.paymentNumber}`;
 
@@ -119,8 +120,22 @@ export function EditablePaymentRow({ payment }: { payment: P }) {
 
   return (
     <tr className="border-b border-[var(--color-border)]/50">
-      <td className="py-2.5 pe-4">{numLabel}</td>
-      <td className="py-2.5 px-4 font-semibold">{formatILS(payment.amount)}</td>
+      <td className="py-2.5 pe-4">
+        {isRefund ? (
+          <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-semibold">
+            החזר
+          </span>
+        ) : (
+          numLabel
+        )}
+      </td>
+      <td
+        className={`py-2.5 px-4 font-semibold ${
+          isRefund ? "text-red-600" : ""
+        }`}
+      >
+        {formatILS(payment.amount)}
+      </td>
       <td className="py-2.5 px-4">{payment.method ?? "—"}</td>
       <td className="py-2.5 px-4 text-[var(--color-muted-foreground)]">
         {payment.dateISO

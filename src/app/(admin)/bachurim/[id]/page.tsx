@@ -6,6 +6,7 @@ import { getActiveYear } from "@/lib/year";
 import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
 import { settleDebts } from "@/lib/debts";
 import { AddReminder, ReminderControls } from "@/app/(admin)/reminders/ui";
+import { RefundButton } from "./refund-button";
 import { DeleteStudentButton } from "./delete-button";
 import { EditablePaymentRow } from "./editable-payment-row";
 import { PromoteStudentButton } from "./promote-button";
@@ -266,12 +267,15 @@ export default async function BachurDetailPage({
               <h2 className="text-lg font-semibold text-[var(--color-primary)]">
                 תשלומים
               </h2>
-              <Link
-                href={`/bachurim/${student.id}/payments/new`}
-                className="px-3 h-8 rounded-md bg-[var(--color-accent)] text-white text-xs font-medium hover:bg-[var(--color-accent-hover)] transition-colors flex items-center"
-              >
-                + תשלום חדש
-              </Link>
+              <div className="flex items-center gap-2">
+                <RefundButton studentId={student.id} />
+                <Link
+                  href={`/bachurim/${student.id}/payments/new`}
+                  className="px-3 h-8 rounded-md bg-[var(--color-accent)] text-white text-xs font-medium hover:bg-[var(--color-accent-hover)] transition-colors flex items-center"
+                >
+                  + תשלום חדש
+                </Link>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
