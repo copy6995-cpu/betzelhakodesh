@@ -287,11 +287,9 @@ export default async function BachurDetailPage({
                 </thead>
                 <tbody>
                   {student.payments.map((p) => {
-                    // Synced-from-API payments are read-only; manual ones are
-                    // editable. Decide by SOURCE only — some manual payments also
-                    // carry paymentNumber 0, so that must not lock them.
-                    const isNedarim =
-                      p.source === "nedarim" || p.method === "נדרים פלוס";
+                    // Read-only decided by payment METHOD only: "נדרים פלוס" is
+                    // synced and locked; any other method is editable.
+                    const isNedarim = p.method === "נדרים פלוס";
                     if (!isNedarim) {
                       return (
                         <EditablePaymentRow
