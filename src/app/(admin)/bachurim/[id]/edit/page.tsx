@@ -21,10 +21,23 @@ export default async function EditBachurPage({
   ]);
   if (!student) return notFound();
 
-  // Debt-year options: all known years (newest first), plus any already on a
-  // debt row, so an existing value never disappears.
+  // Debt-year options: the standard school years, plus any year present in the
+  // DB or already on a debt row, newest first (so an existing value never
+  // disappears and old years like תשפ"ב are always pickable).
+  const STANDARD_YEARS = [
+    'תשפ"ב',
+    'תשפ"ג',
+    'תשפ"ד',
+    'תשפ"ה',
+    'תשפ"ו',
+    'תשפ"ז',
+  ];
   const yearOptions = [
-    ...new Set([...years.map((y) => y.year), ...student.debts.map((d) => d.year)]),
+    ...new Set([
+      ...STANDARD_YEARS,
+      ...years.map((y) => y.year),
+      ...student.debts.map((d) => d.year),
+    ]),
   ].sort((a, b) => (a < b ? 1 : -1));
 
   return (
