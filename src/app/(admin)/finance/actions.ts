@@ -10,6 +10,15 @@ async function requireUser() {
   if (!s?.user) throw new Error("לא מורשה");
 }
 
+/** Today's date (Jerusalem wall-clock) as yyyy-mm-dd. */
+function jerusalemTodayISO(): string {
+  const d = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })
+  );
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export type EntryInput = {
   kind: string; // "income" | "expense"
   category: string;
@@ -29,7 +38,8 @@ export async function addFinanceEntry(input: EntryInput): Promise<void> {
       category: input.category.trim() || "misc",
       label: input.label.trim() || null,
       amount: Number(input.amount) || 0,
-      date: input.date ? new Date(`${input.date}T00:00:00`) : null,
+      // No date entered → default to today (Jerusalem).
+      date: new Date(`${input.date || jerusalemTodayISO()}T00:00:00`),
       meta: input.meta ? JSON.stringify(input.meta) : null,
     },
   });

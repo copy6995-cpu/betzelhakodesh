@@ -197,18 +197,48 @@ function Card({
 
 function Section({
   title,
+  action,
   children,
 }: {
   title: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="bg-white rounded-xl card-shadow p-5">
-      <h2 className="text-base font-semibold text-[var(--color-primary)] mb-3">
-        {title}
-      </h2>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 className="text-base font-semibold text-[var(--color-primary)]">
+          {title}
+        </h2>
+        {action}
+      </div>
       {children}
     </section>
+  );
+}
+
+/** Small per-section Excel export link (button style, for section headers). */
+function ExportLink({ section, href }: { section?: string; href?: string }) {
+  return (
+    <a
+      href={href ?? `/api/finance/export?section=${section}`}
+      className="inline-flex items-center h-8 px-3 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-muted)] whitespace-nowrap"
+    >
+      ↓ ייצוא
+    </a>
+  );
+}
+
+/** Inline (text) export link, for rows inside the income section. */
+function MiniExport({ section }: { section: string }) {
+  return (
+    <a
+      href={`/api/finance/export?section=${section}`}
+      className="text-xs text-[var(--color-accent)] hover:underline whitespace-nowrap"
+      title="ייצוא לאקסל"
+    >
+      ↓ ייצוא
+    </a>
   );
 }
 
@@ -239,15 +269,21 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       {/* Income */}
       <Section title={`הכנסות · ${nis(income.total)}`}>
         <div className="text-sm mb-3">
-          <div className="flex justify-between py-1.5 border-b border-[var(--color-border)]/40">
+          <div className="flex justify-between items-center py-1.5 border-b border-[var(--color-border)]/40">
             <span className="font-medium">נדרים פלוס</span>
-            <span className="font-semibold">{nis(income.nedarim)}</span>
+            <span className="flex items-center gap-3">
+              <MiniExport section="nedarim" />
+              <span className="font-semibold">{nis(income.nedarim)}</span>
+            </span>
           </div>
-          <div className="flex justify-between py-1.5 border-b border-[var(--color-border)]/40">
+          <div className="flex justify-between items-center py-1.5 border-b border-[var(--color-border)]/40">
             <span className="font-medium">
               אשראי — דוח קבוצות (כל הקבוצות)
             </span>
-            <span className="font-semibold">{nis(income.groupsCredit)}</span>
+            <span className="flex items-center gap-3">
+              <MiniExport section="groups" />
+              <span className="font-semibold">{nis(income.groupsCredit)}</span>
+            </span>
           </div>
           <div className="flex justify-between items-center py-1.5 border-b border-[var(--color-border)]/40">
             <span className="font-medium">
@@ -259,12 +295,18 @@ export function FinanceUI({ data }: { data: FinanceData }) {
                 (ניהול ←)
               </Link>
             </span>
-            <span className="font-semibold">{nis(income.chul)}</span>
+            <span className="flex items-center gap-3">
+              <MiniExport section="chul" />
+              <span className="font-semibold">{nis(income.chul)}</span>
+            </span>
           </div>
         </div>
-        <h3 className="text-sm font-medium text-[var(--color-muted-foreground)] mb-1">
-          אחר · צ׳ק · העברה
-        </h3>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-medium text-[var(--color-muted-foreground)]">
+            אחר · צ׳ק · העברה
+          </h3>
+          <MiniExport section="income-manual" />
+        </div>
         <EntryList
           rows={income.manual}
           kind="income"
@@ -278,7 +320,7 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       </Section>
 
       {/* Supervisors */}
-      <Section title="הוצאות · משגיחים">
+      <Section title="הוצאות · משגיחים" action={<ExportLink section="supervisors" />}>
         <div className="grid grid-cols-3 gap-3 text-center text-sm mb-3">
           <div className="rounded-lg bg-[var(--color-muted)] p-2">
             <div className="text-xs text-[var(--color-muted-foreground)]">
@@ -334,7 +376,7 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       </Section>
 
       {/* Yeshiva representatives */}
-      <Section title="הוצאות · נציגים בישיבות">
+      <Section title="הוצאות · נציגים בישיבות" action={<ExportLink section="reps" />}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm">
             <span className="font-medium">סה״כ ששולם לנציגים בישיבות</span>
@@ -352,7 +394,7 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       </Section>
 
       {/* Adnei HaKodesh */}
-      <Section title="הוצאות · אדני הקודש">
+      <Section title="הוצאות · אדני הקודש" action={<ExportLink href="/api/finance/adnei/export" />}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm">
             <span className="font-medium">סה״כ אדני הקודש</span>
@@ -370,7 +412,7 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       </Section>
 
       {/* Beit Malka */}
-      <Section title="הוצאות · בית מלכה (מיטות)">
+      <Section title="הוצאות · בית מלכה (מיטות)" action={<ExportLink section="beit-malka" />}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm">
             <span className="font-medium">שולם עבור מיטות בית מלכה</span>
@@ -388,7 +430,7 @@ export function FinanceUI({ data }: { data: FinanceData }) {
       </Section>
 
       {/* Misc */}
-      <Section title="הוצאות · שונות">
+      <Section title="הוצאות · שונות" action={<ExportLink section="misc" />}>
         <EntryList
           rows={expense.byCategory["misc"] ?? []}
           kind="expense"
