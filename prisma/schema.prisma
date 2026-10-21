@@ -85,6 +85,7 @@ model Student {
 
   payments        Payment[]
   debts           StudentDebt[]
+  reminders       Reminder[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -110,6 +111,23 @@ model StudentDebt {
   updatedAt DateTime @updatedAt
 
   @@index([studentId])
+}
+
+/// A follow-up reminder on a bachur. Shown on the reminders page from its
+/// dueDate onward (not before) until marked done; can be snoozed to a new date.
+model Reminder {
+  id        String    @id @default(cuid())
+  studentId String
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  text      String
+  dueDate   DateTime
+  done      Boolean   @default(false)
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([studentId])
+  @@index([done, dueDate])
 }
 
 model Payment {

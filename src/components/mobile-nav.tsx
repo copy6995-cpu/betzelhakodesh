@@ -13,9 +13,11 @@ import { navIsActive, visibleNavLinks } from "@/lib/nav-links";
 export function MobileNav({
   role,
   sections,
+  reminderCount = 0,
 }: {
   role?: string;
   sections: string[];
+  reminderCount?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -83,9 +85,14 @@ export function MobileNav({
                   href={l.href}
                   data-active={navIsActive(pathname, l)}
                   onClick={() => setOpen(false)}
-                  className="block px-6 py-3 text-base text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:text-white data-[active=true]:bg-white/10 border-b border-white/5"
+                  className="flex items-center justify-between px-6 py-3 text-base text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:text-white data-[active=true]:bg-white/10 border-b border-white/5"
                 >
-                  {l.label}
+                  <span>{l.label}</span>
+                  {l.key === "reminders" && reminderCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold">
+                      {reminderCount}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>

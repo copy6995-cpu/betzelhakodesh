@@ -5,6 +5,7 @@ import { formatILS, formatNum } from "@/lib/utils";
 import { getActiveYear } from "@/lib/year";
 import { getExpiredEndDateLabels, isEshelActive } from "@/lib/eshel";
 import { settleDebts } from "@/lib/debts";
+import { AddReminder, ReminderControls } from "@/app/(admin)/reminders/ui";
 import { DeleteStudentButton } from "./delete-button";
 import { DeletePaymentButton } from "./delete-payment-button";
 import { PromoteStudentButton } from "./promote-button";
@@ -24,6 +25,7 @@ export default async function BachurDetailPage({
       parent: { include: { students: { select: { id: true, year: true, firstName: true, lastName: true, personalCode: true } } } },
       payments: { orderBy: { paymentNumber: "asc" } },
       debts: { orderBy: { year: "asc" } },
+      reminders: { where: { done: false }, orderBy: { dueDate: "asc" } },
     },
   });
 
@@ -232,6 +234,31 @@ export default async function BachurDetailPage({
                 </div>
               )}
             </div>
+          </section>
+
+          <section className="bg-white rounded-xl card-shadow p-6">
+            <h2 className="text-lg font-semibold text-[var(--color-primary)] mb-4">
+              תזכורות
+            </h2>
+            <AddReminder studentId={student.id} />
+            {student.reminders.length > 0 && (
+              <div className="mt-4 divide-y divide-[var(--color-border)]/60">
+                {student.reminders.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800 me-2">
+                        {r.dueDate.toLocaleDateString("he-IL")}
+                      </span>
+                      <span className="text-sm">{r.text}</span>
+                    </div>
+                    <ReminderControls id={r.id} />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="bg-white rounded-xl card-shadow p-6">

@@ -22,6 +22,7 @@ export type Section = {
  *  available to any signed-in user, so it is not listed here. */
 export const SECTIONS: Section[] = [
   { key: "bachurim", label: "בחורים", href: "/bachurim", prefixes: ["/bachurim", "/api/bachurim"] },
+  { key: "reminders", label: "תזכורות", href: "/reminders", prefixes: ["/reminders"] },
   { key: "parents", label: "הורים", href: "/parents", prefixes: ["/parents", "/api/parents"] },
   { key: "payments", label: "תשלומים", href: "/payments", prefixes: ["/payments"] },
   { key: "finance", label: "הכנסות והוצאות", href: "/finance", prefixes: ["/finance"] },

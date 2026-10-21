@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { getActiveYear, getAvailableYears } from "@/lib/year";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { UserMenu } from "./user-menu";
 import { HeaderNav } from "./header-nav";
 import { MobileNav } from "./mobile-nav";
 import { YearSwitcher } from "./year-switcher";
 
 export async function SiteHeader() {
-  const [activeYear, availableYears, session] = await Promise.all([
+  const [activeYear, availableYears, session, reminderCount] = await Promise.all([
     getActiveYear(),
     getAvailableYears(),
     auth(),
+    prisma.reminder.count({ where: { done: false, dueDate: { lte: new Date() } } }),
   ]);
   const sessionUser = session?.user as
     | { role?: string; sections?: string[]; name?: string | null; email?: string | null }
@@ -24,7 +26,11 @@ export async function SiteHeader() {
         <div className="flex h-16 items-center justify-between gap-4">
           <div className="flex items-center gap-2 md:gap-8 min-w-0 flex-1">
             {role !== "rep" && (
-              <MobileNav role={role} sections={sections} />
+              <MobileNav
+                role={role}
+                sections={sections}
+                reminderCount={reminderCount}
+              />
             )}
             <Link href="/" className="flex items-center gap-3 shrink-0">
               <div className="w-9 h-9 rounded-lg bg-[var(--color-accent)] flex items-center justify-center shrink-0">
@@ -34,7 +40,11 @@ export async function SiteHeader() {
                 בצל הקודש
               </span>
             </Link>
-            <HeaderNav role={role} sections={sections} />
+            <HeaderNav
+              role={role}
+              sections={sections}
+              reminderCount={reminderCount}
+            />
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {role !== "rep" && (

@@ -26,13 +26,27 @@ const GAP = 4; // matches gap-1
 export function HeaderNav({
   role,
   sections,
+  reminderCount = 0,
 }: {
   role?: string;
   sections: string[];
+  reminderCount?: number;
 }) {
   const pathname = usePathname();
   // Reps have a single locked page and no section nav.
   const items = visibleNavLinks(role, sections);
+
+  const label = (l: { key: string | null; label: string }) =>
+    l.key === "reminders" && reminderCount > 0 ? (
+      <>
+        {l.label}
+        <span className="ms-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold align-middle">
+          {reminderCount}
+        </span>
+      </>
+    ) : (
+      l.label
+    );
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const measureRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -104,7 +118,7 @@ export function HeaderNav({
             }}
             className={ITEM_CLS}
           >
-            {l.label}
+            {label(l)}
           </span>
         ))}
         <span ref={moreMeasureRef} className={ITEM_CLS}>
@@ -122,7 +136,7 @@ export function HeaderNav({
           data-active={isActive(pathname, l)}
           className={ITEM_CLS + " shrink-0"}
         >
-          {l.label}
+          {label(l)}
         </Link>
       ))}
 
@@ -171,7 +185,7 @@ export function HeaderNav({
                     onClick={() => setOpen(false)}
                     className="block px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:text-white data-[active=true]:bg-white/10"
                   >
-                    {l.label}
+                    {label(l)}
                   </Link>
                 ))}
               </div>
