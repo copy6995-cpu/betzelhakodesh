@@ -144,7 +144,12 @@ export async function loadRegistrationsByYeshiva(opts: {
     prisma.yemotBedReservation.findMany({
       where: {
         status: "מאושר",
-        ...(opts.source ? { source: opts.source } : {}),
+        // A selected source line still includes manual registrations — a
+        // hand-entered booking (source="manual") isn't one of the Yemot lines
+        // but must always count as a registration.
+        ...(opts.source
+          ? { OR: [{ source: opts.source }, { source: "manual" }] }
+          : {}),
       },
     }),
     loadCancellations(),
