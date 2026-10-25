@@ -13,6 +13,7 @@ import {
   chargeSingleFromKeva,
 } from "@/lib/nedarim";
 import { attachFormsToStudents, type AttachResult } from "@/lib/form-attachment";
+import { syncPaymentsFromNedarim } from "@/lib/payment-sync";
 
 export async function saveNedarimCreds(
   mosadId: string,
@@ -61,8 +62,13 @@ export async function syncTransactionsNow(): Promise<{
     update: { value: new Date().toISOString() },
     create: { key: "nedarim_last_sync_tx", value: new Date().toISOString() },
   });
+  // Materialize the freshly-synced transactions into Payments right away, so
+  // "שולם"/יתרה update without needing the separate payments-sync button.
+  await syncPaymentsFromNedarim();
   revalidatePath("/settings/nedarim");
   revalidatePath("/nedarim/transactions");
+  revalidatePath("/payments");
+  revalidatePath("/bachurim");
   return result;
 }
 
